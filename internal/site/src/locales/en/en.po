@@ -13,10 +13,9 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#. placeholder {0}: title ?? "Network Monitors"
 #: src/components/network-monitors-table/network-monitors-table.tsx
-msgid "{0}"
-msgstr "{0}"
+#~ msgid "{0}"
+#~ msgstr "{0}"
 
 #. placeholder {0}: newVersion.v
 #: src/components/footer-repo-link.tsx
@@ -1474,6 +1473,7 @@ msgstr "Network Monitor Loss"
 #: src/components/navbar.tsx
 #: src/components/network-monitors-table/monitor-dialog.tsx
 #: src/components/network-monitors-table/monitor-dialog.tsx
+#: src/components/network-monitors-table/network-monitors-table.tsx
 #: src/components/routes/monitors.tsx
 msgid "Network Monitors"
 msgstr "Network Monitors"

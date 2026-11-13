@@ -308,7 +308,7 @@ export default function NetworkMonitorsTableNew({
 				<div className="grid md-lg:flex gap-x-5 gap-y-3 w-full items-end">
 					<div className="px-2 sm:px-1">
 						<CardTitle className="mb-2">
-							<Trans>{title ?? "Network Monitors"}</Trans>
+							{title ?? <Trans>Network Monitors</Trans>}
 						</CardTitle>
 						<div className="text-sm text-muted-foreground flex items-center flex-wrap">
 							<Trans>Response time monitoring from agents.</Trans>

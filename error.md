@@ -66,3 +66,10 @@
 - Agent: `make build-agent` — **succeeded** (`build/beszel-agent_darwin_arm64`).
 - Hub: `make build-hub` — **succeeded** (`build/beszel_darwin_arm64`).
 - Combined: `make build` builds agent and hub (and web UI unless skipped).
+
+## 5. Local database added to app (PostgreSQL on this machine)
+- **Detected:** PostgreSQL 18 listening on `127.0.0.1:5006` (Homebrew, `postgres` PID present); `DATABASE_URL=postgres://postgres@localhost:5006/server?sslmode=disable`.
+- **Action:** Inserted system and TCP network monitor in `server` DB so it appears in the app (Databases/Monitors filtered by DB ports incl. 5006):
+  - `systems`: `id=syslocalpg`, `name=Local Machine`, `host=127.0.0.1`, `port=45876`, `status=down`, `users=["zht0w1qiv5f0i8y"]`
+  - `network_monitors`: `id=2c3b6f3` (stable hash for syslocalpg/127.0.0.1/tcp/5006), `system=syslocalpg`, `target=127.0.0.1`, `port=5006`, `protocol=tcp`, `interval=60`, `enabled=true`
+- **Notes:** Monitor response/status updates require a connected agent/system check cycle; UI will list the database monitor under `/databases` (and `/monitors`) when logged in. Other local DB names on port 5006: `apotek_pos`, `obs_db`, `postgres`, `server` (same port endpoint).
