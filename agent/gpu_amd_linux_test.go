@@ -1,0 +1,512 @@
+//go:build linux
+
+package agent
+
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"syscall"
+	"testing"
+	"time"
+
+	"github.com/henrygd/beszel/agent/utils"
+	"github.com/henrygd/beszel/internal/entities/system"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestCollectAmdStatsRecoversAfterReadFailures(t *testing.T) {
+	root := t.TempDir()
+	oldRoot, oldSleep := drmSysfsRoot, amdSysfsSleep
+	drmSysfsRoot = root
+	t.Cleanup(func() {
+		drmSysfsRoot, amdSysfsSleep = oldRoot, oldSleep
+	})
+
+	devicePath := filepath.Join(root, "card0", "device")
+	require.NoError(t, os.MkdirAll(devicePath, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(devicePath, "vendor"), []byte("0x1002"), 0o644))
+	metrics := map[string]string{
+		"gpu_busy_percent":    "25",
+		"mem_info_vram_used":  "1073741824",
+		"mem_info_vram_total": "2147483648",
+	}
+	writeMetrics := func() {
+		for name, value := range metrics {
+			require.NoError(t, os.WriteFile(filepath.Join(devicePath, name), []byte(value), 0o644))
+		}
+	}
+	writeMetrics()
+
+	gm := &GPUManager{GpuDataMap: map[string]*system.GPUData{"card0": {Name: "AMD Test GPU"}}}
+	failures := 0
+	removed := false
+	recovered := false
+	amdSysfsSleep = func(delay time.Duration) {
+		if !removed {
+			assert.Equal(t, 1.0, gm.GpuDataMap["card0"].Count)
+			assert.Equal(t, 3*time.Second, delay)
+			for name := range metrics {
+				require.NoError(t, os.Remove(filepath.Join(devicePath, name)))
+			}
+			removed = true
+			return
+		}
+		if gm.GpuDataMap["card0"].Count == 2 {
+			assert.Equal(t, 3*time.Second, delay)
+			recovered = true
+			// Stop the collector goroutine after observing the recovered sample.
+			runtime.Goexit()
+		}
+		assert.Equal(t, retryWaitTime, delay)
+		failures++
+		if failures == maxFailureRetries+2 {
+			writeMetrics()
+		} else if failures > maxFailureRetries+2 {
+			runtime.Goexit()
+		}
+	}
+
+	done := make(chan struct{})
+	var err error
+	go func() {
+		defer close(done)
+		err = gm.collectAmdStats()
+	}()
+	<-done
+	require.NoError(t, err, "collector must keep polling through prolonged sysfs read failures")
+	require.True(t, recovered, "collector must resume when sysfs metrics are restored")
+	assert.Equal(t, maxFailureRetries+2, failures)
+	assert.Equal(t, 50.0, gm.GpuDataMap["card0"].Usage)
+	assert.Equal(t, utils.BytesToMegabytes(1073741824), gm.GpuDataMap["card0"].MemoryUsed)
+}
+
+func TestNormalizeHexID(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"0x1002", "1002"},
+		{"C2", "c2"},
+		{"  15BF  ", "15bf"},
+		{"0x15bf", "15bf"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		subName := tt.in
+		if subName == "" {
+			subName = "empty_string"
+		}
+		t.Run(subName, func(t *testing.T) {
+			got := normalizeHexID(tt.in)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestCacheKeyForAmdgpu(t *testing.T) {
+	tests := []struct {
+		deviceID   string
+		revisionID string
+		want       string
+	}{
+		{"1114", "c2", "1114:c2"},
+		{"15bf", "", "15bf"},
+		{"1506", "c1", "1506:c1"},
+	}
+	for _, tt := range tests {
+		got := cacheKeyForAmdgpu(tt.deviceID, tt.revisionID)
+		assert.Equal(t, tt.want, got)
+	}
+}
+
+func TestReadSysfsFloat(t *testing.T) {
+	dir := t.TempDir()
+
+	validPath := filepath.Join(dir, "val")
+	require.NoError(t, os.WriteFile(validPath, []byte("  42.5  \n"), 0o644))
+	got, err := readSysfsFloat(validPath)
+	require.NoError(t, err)
+	assert.Equal(t, 42.5, got)
+
+	// Integer and scientific
+	sciPath := filepath.Join(dir, "sci")
+	require.NoError(t, os.WriteFile(sciPath, []byte("1e2"), 0o644))
+	got, err = readSysfsFloat(sciPath)
+	require.NoError(t, err)
+	assert.Equal(t, 100.0, got)
+
+	// Missing file
+	_, err = readSysfsFloat(filepath.Join(dir, "missing"))
+	require.Error(t, err)
+
+	// Invalid content
+	badPath := filepath.Join(dir, "bad")
+	require.NoError(t, os.WriteFile(badPath, []byte("not a number"), 0o644))
+	_, err = readSysfsFloat(badPath)
+	require.Error(t, err)
+}
+
+func TestSysfsBackoff(t *testing.T) {
+	const path = "/sys/class/drm/card1/device/gpu_busy_percent"
+	start := time.Now()
+	unsupported := &os.PathError{Op: "read", Path: path, Err: syscall.EOPNOTSUPP}
+
+	t.Run("fast reads are never backed off", func(t *testing.T) {
+		b := newSysfsBackoff()
+		b.record(path, nil, time.Millisecond, start)
+		b.record(path, os.ErrNotExist, time.Millisecond, start)
+		assert.True(t, b.allow(path, start))
+	})
+
+	t.Run("unsupported read backs off and doubles up to max", func(t *testing.T) {
+		b := newSysfsBackoff()
+		now := start
+		want := sysfsBackoffMin
+		for range 8 {
+			b.record(path, unsupported, time.Millisecond, now)
+			assert.False(t, b.allow(path, now.Add(want-time.Second)))
+			assert.True(t, b.allow(path, now.Add(want)))
+			now = now.Add(want)
+			want = min(want*2, sysfsBackoffMax)
+		}
+		assert.Equal(t, sysfsBackoffMax, b.entries[path].delay)
+	})
+
+	t.Run("slow failed read backs off", func(t *testing.T) {
+		b := newSysfsBackoff()
+		timedOut := &os.PathError{Op: "read", Path: path, Err: syscall.ETIME}
+		b.record(path, timedOut, sysfsSlowReadThreshold, start)
+		assert.False(t, b.allow(path, start))
+		assert.True(t, b.allow(path, start.Add(sysfsBackoffMin)))
+	})
+
+	t.Run("slow successful read is not backed off", func(t *testing.T) {
+		b := newSysfsBackoff()
+		b.record(path, nil, sysfsSlowReadThreshold, start)
+		assert.True(t, b.allow(path, start))
+	})
+
+	t.Run("slow successful read clears backoff", func(t *testing.T) {
+		b := newSysfsBackoff()
+		b.record(path, unsupported, time.Millisecond, start)
+		b.record(path, nil, sysfsSlowReadThreshold, start.Add(sysfsBackoffMin))
+		assert.Empty(t, b.entries)
+	})
+
+	t.Run("fast success resets delay", func(t *testing.T) {
+		b := newSysfsBackoff()
+		b.record(path, unsupported, time.Millisecond, start)
+		b.record(path, unsupported, time.Millisecond, start.Add(sysfsBackoffMin))
+		b.record(path, nil, time.Millisecond, start.Add(3*sysfsBackoffMin))
+		assert.True(t, b.allow(path, start.Add(3*sysfsBackoffMin)))
+		b.record(path, unsupported, time.Millisecond, start.Add(3*sysfsBackoffMin))
+		assert.Equal(t, sysfsBackoffMin, b.entries[path].delay)
+	})
+
+	t.Run("readSysfsFloat skips backed off files", func(t *testing.T) {
+		valPath := filepath.Join(t.TempDir(), "val")
+		require.NoError(t, os.WriteFile(valPath, []byte("42"), 0o644))
+		amdSysfsBackoff.record(valPath, unsupported, time.Millisecond, time.Now())
+		t.Cleanup(func() { amdSysfsBackoff.record(valPath, nil, 0, time.Now()) })
+
+		_, err := readSysfsFloat(valPath)
+		assert.ErrorIs(t, err, errSysfsBackoff)
+	})
+}
+
+func TestIsAmdGpu(t *testing.T) {
+	dir := t.TempDir()
+	deviceDir := filepath.Join(dir, "device")
+	require.NoError(t, os.MkdirAll(deviceDir, 0o755))
+
+	// AMD vendor 0x1002 -> true
+	require.NoError(t, os.WriteFile(filepath.Join(deviceDir, "vendor"), []byte("0x1002\n"), 0o644))
+	assert.True(t, isAmdGpu(dir), "vendor 0x1002 should be AMD")
+
+	// Non-AMD vendor -> false
+	require.NoError(t, os.WriteFile(filepath.Join(deviceDir, "vendor"), []byte("0x10de\n"), 0o644))
+	assert.False(t, isAmdGpu(dir), "vendor 0x10de should not be AMD")
+
+	// Missing vendor file -> false
+	require.NoError(t, os.Remove(filepath.Join(deviceDir, "vendor")))
+	assert.False(t, isAmdGpu(dir), "missing vendor file should be false")
+}
+
+func TestAmdgpuNameCacheRoundTrip(t *testing.T) {
+	// Cache a name and retrieve it (unique key to avoid affecting other tests)
+	deviceID, revisionID := "cachedev99", "00"
+	cacheAmdgpuName(deviceID, revisionID, "AMD Test GPU 99 Graphics", true)
+
+	name, found, done := getCachedAmdgpuName(deviceID, revisionID)
+	assert.True(t, found)
+	assert.True(t, done)
+	assert.Equal(t, "AMD Test GPU 99", name)
+
+	// Device-only key also stored
+	name2, found2, _ := getCachedAmdgpuName(deviceID, "")
+	assert.True(t, found2)
+	assert.Equal(t, "AMD Test GPU 99", name2)
+
+	// Cache a miss
+	cacheMissingAmdgpuName("missedev99", "ab")
+	_, found3, done3 := getCachedAmdgpuName("missedev99", "ab")
+	assert.False(t, found3)
+	assert.True(t, done3, "done should be true so caller skips file lookup")
+}
+
+func TestUpdateAmdGpuDataWithFakeSysfs(t *testing.T) {
+	const gib = 1 << 30
+	// gpu_metrics starts with metrics_table_header: u16 structure_size, u8 format_revision, u8 content_revision
+	metrics := func(formatRevision byte) []byte { return []byte{0x68, 0x00, formatRevision, 0x00} }
+
+	tests := []struct {
+		name            string
+		gpuMetrics      []byte // nil: no gpu_metrics file
+		vramUsed        int64
+		vramTotal       int64
+		gttUsed         int64 // 0: no gtt files
+		gttTotal        int64
+		wantMemoryUsed  float64
+		wantMemoryTotal float64
+	}{
+		{
+			// Strix Halo style APU (issue 1569): 1 GiB carve-out, huge GTT
+			name:            "apu sums vram and gtt",
+			gpuMetrics:      metrics(2),
+			vramUsed:        gib / 4,
+			vramTotal:       gib,
+			gttUsed:         gib / 2,
+			gttTotal:        96 * gib,
+			wantMemoryUsed:  utils.BytesToMegabytes(gib/4 + gib/2),
+			wantMemoryTotal: utils.BytesToMegabytes(gib + 96*gib),
+		},
+		{
+			name:            "gpu_metrics v3 is an apu too",
+			gpuMetrics:      metrics(3),
+			vramUsed:        gib / 4,
+			vramTotal:       gib,
+			gttUsed:         gib / 2,
+			gttTotal:        4 * gib,
+			wantMemoryUsed:  utils.BytesToMegabytes(gib/4 + gib/2),
+			wantMemoryTotal: utils.BytesToMegabytes(gib + 4*gib),
+		},
+		{
+			// RX 5700 XT style card (issue 2682): GTT is system RAM, not VRAM
+			name:            "discrete card ignores gtt",
+			gpuMetrics:      metrics(1),
+			vramUsed:        gib / 2,
+			vramTotal:       8 * gib,
+			gttUsed:         21 << 20,
+			gttTotal:        15*gib + 700<<20,
+			wantMemoryUsed:  utils.BytesToMegabytes(gib / 2),
+			wantMemoryTotal: utils.BytesToMegabytes(8 * gib),
+		},
+		{
+			name:            "no gpu_metrics and large vram is a discrete card",
+			vramUsed:        gib,
+			vramTotal:       8 * gib,
+			gttUsed:         gib / 2,
+			gttTotal:        16 * gib,
+			wantMemoryUsed:  utils.BytesToMegabytes(gib),
+			wantMemoryTotal: utils.BytesToMegabytes(8 * gib),
+		},
+		{
+			name:            "no gpu_metrics and small vram is an apu",
+			vramUsed:        gib / 4,
+			vramTotal:       gib,
+			gttUsed:         gib / 2,
+			gttTotal:        4 * gib,
+			wantMemoryUsed:  utils.BytesToMegabytes(gib/4 + gib/2),
+			wantMemoryTotal: utils.BytesToMegabytes(gib + 4*gib),
+		},
+		{
+			name:            "falls back to vram when gtt is missing",
+			gpuMetrics:      metrics(2),
+			vramUsed:        gib,
+			vramTotal:       2 * gib,
+			wantMemoryUsed:  utils.BytesToMegabytes(gib),
+			wantMemoryTotal: utils.BytesToMegabytes(2 * gib),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			cardPath := filepath.Join(dir, "card0")
+			devicePath := filepath.Join(cardPath, "device")
+			hwmonPath := filepath.Join(devicePath, "hwmon", "hwmon0")
+			require.NoError(t, os.MkdirAll(hwmonPath, 0o755))
+
+			write := func(name, content string) {
+				require.NoError(t, os.WriteFile(filepath.Join(devicePath, name), []byte(content), 0o644))
+			}
+			write("vendor", "0x1002")
+			write("device", "0x1506")
+			write("revision", "0xc1")
+			write("gpu_busy_percent", "25")
+			write("mem_info_vram_used", strconv.FormatInt(tt.vramUsed, 10))
+			write("mem_info_vram_total", strconv.FormatInt(tt.vramTotal, 10))
+			if tt.gttUsed > 0 {
+				write("mem_info_gtt_used", strconv.FormatInt(tt.gttUsed, 10))
+				write("mem_info_gtt_total", strconv.FormatInt(tt.gttTotal, 10))
+			}
+			if tt.gpuMetrics != nil {
+				require.NoError(t, os.WriteFile(filepath.Join(devicePath, "gpu_metrics"), tt.gpuMetrics, 0o644))
+			}
+			require.NoError(t, os.WriteFile(filepath.Join(hwmonPath, "temp1_input"), []byte("45000"), 0o644))
+			require.NoError(t, os.WriteFile(filepath.Join(hwmonPath, "power1_input"), []byte("20000000"), 0o644))
+
+			// Pre-cache name so getAmdGpuName returns a known value (it uses system amdgpu.ids path)
+			cacheAmdgpuName("1506", "c1", "AMD Radeon 610M Graphics", true)
+
+			gm := &GPUManager{GpuDataMap: make(map[string]*system.GPUData)}
+			ok := gm.updateAmdGpuData(cardPath)
+			require.True(t, ok)
+
+			gpu, ok := gm.GpuDataMap["card0"]
+			require.True(t, ok)
+			assert.Equal(t, "AMD Radeon 610M", gpu.Name)
+			assert.Equal(t, 25.0, gpu.Usage)
+			assert.Equal(t, tt.wantMemoryUsed, gpu.MemoryUsed)
+			assert.Equal(t, tt.wantMemoryTotal, gpu.MemoryTotal)
+			assert.Equal(t, 45.0, gpu.Temperature)
+			assert.Equal(t, 20.0, gpu.Power)
+			assert.Equal(t, 1.0, gpu.Count)
+		})
+	}
+}
+
+func TestAmdGpuIsUnifiedMemoryCaching(t *testing.T) {
+	const gib = 1 << 30
+	metrics := func(formatRevision byte) []byte { return []byte{0x68, 0x00, formatRevision, 0x00} }
+
+	t.Run("gpu_metrics result is cached", func(t *testing.T) {
+		devicePath := t.TempDir()
+		metricsPath := filepath.Join(devicePath, "gpu_metrics")
+		require.NoError(t, os.WriteFile(metricsPath, metrics(2), 0o644))
+
+		assert.True(t, amdGpuIsUnifiedMemory(devicePath, 8*gib))
+		// the table is not read again, so a changed (or removed) file has no effect
+		require.NoError(t, os.WriteFile(metricsPath, metrics(1), 0o644))
+		assert.True(t, amdGpuIsUnifiedMemory(devicePath, 8*gib))
+		require.NoError(t, os.Remove(metricsPath))
+		assert.True(t, amdGpuIsUnifiedMemory(devicePath, 8*gib))
+	})
+
+	t.Run("missing gpu_metrics caches size fallback", func(t *testing.T) {
+		devicePath := t.TempDir()
+		assert.True(t, amdGpuIsUnifiedMemory(devicePath, gib))
+		assert.False(t, amdGpuIsUnifiedMemory(devicePath, 8*gib), "size is re-evaluated each poll")
+		// a table appearing later is ignored: the fallback was cached
+		require.NoError(t, os.WriteFile(filepath.Join(devicePath, "gpu_metrics"), metrics(2), 0o644))
+		assert.False(t, amdGpuIsUnifiedMemory(devicePath, 8*gib))
+	})
+
+	t.Run("failed vram read is not taken for an apu", func(t *testing.T) {
+		assert.False(t, amdGpuIsUnifiedMemory(t.TempDir(), 0))
+	})
+
+	t.Run("transient read failure is retried", func(t *testing.T) {
+		devicePath := t.TempDir()
+		metricsPath := filepath.Join(devicePath, "gpu_metrics")
+		// opening a directory succeeds but reading it fails with EISDIR
+		require.NoError(t, os.Mkdir(metricsPath, 0o755))
+		assert.False(t, amdGpuIsUnifiedMemory(devicePath, 8*gib), "falls back to size while unreadable")
+
+		require.NoError(t, os.Remove(metricsPath))
+		require.NoError(t, os.WriteFile(metricsPath, metrics(2), 0o644))
+		assert.True(t, amdGpuIsUnifiedMemory(devicePath, 8*gib), "table is read again after a failure")
+	})
+
+	t.Run("unknown or short table falls back to size", func(t *testing.T) {
+		for _, data := range [][]byte{metrics(9), {0x68, 0x00}} {
+			devicePath := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(devicePath, "gpu_metrics"), data, 0o644))
+			assert.True(t, amdGpuIsUnifiedMemory(devicePath, gib))
+			assert.False(t, amdGpuIsUnifiedMemory(devicePath, 8*gib))
+		}
+	})
+}
+
+func TestLookupAmdgpuNameInFile(t *testing.T) {
+	idsPath := filepath.Join("test-data", "amdgpu.ids")
+
+	tests := []struct {
+		name       string
+		deviceID   string
+		revisionID string
+		wantName   string
+		wantExact  bool
+		wantFound  bool
+	}{
+		{
+			name:       "exact device and revision match",
+			deviceID:   "1114",
+			revisionID: "c2",
+			wantName:   "AMD Radeon 860M Graphics",
+			wantExact:  true,
+			wantFound:  true,
+		},
+		{
+			name:       "exact match 15BF revision 01 returns 760M",
+			deviceID:   "15bf",
+			revisionID: "01",
+			wantName:   "AMD Radeon 760M Graphics",
+			wantExact:  true,
+			wantFound:  true,
+		},
+		{
+			name:       "exact match 15BF revision 00 returns 780M",
+			deviceID:   "15bf",
+			revisionID: "00",
+			wantName:   "AMD Radeon 780M Graphics",
+			wantExact:  true,
+			wantFound:  true,
+		},
+		{
+			name:       "device-only match returns first entry for device",
+			deviceID:   "1506",
+			revisionID: "",
+			wantName:   "AMD Radeon 610M",
+			wantExact:  false,
+			wantFound:  true,
+		},
+		{
+			name:       "unknown device not found",
+			deviceID:   "dead",
+			revisionID: "00",
+			wantName:   "",
+			wantExact:  false,
+			wantFound:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotName, gotExact, gotFound := lookupAmdgpuNameInFile(tt.deviceID, tt.revisionID, idsPath)
+			assert.Equal(t, tt.wantName, gotName, "name")
+			assert.Equal(t, tt.wantExact, gotExact, "exact")
+			assert.Equal(t, tt.wantFound, gotFound, "found")
+		})
+	}
+}
+
+func TestGetAmdGpuNameFromIdsFile(t *testing.T) {
+	// Test that getAmdGpuName resolves a name when we can't inject the ids path.
+	// We only verify behavior when product_name is missing and device/revision
+	// would be read from sysfs; the actual lookup uses /usr/share/libdrm/amdgpu.ids.
+	// So this test focuses on normalizeAmdgpuName and that lookupAmdgpuNameInFile
+	// returns the expected name for our test-data file.
+	idsPath := filepath.Join("test-data", "amdgpu.ids")
+	name, exact, found := lookupAmdgpuNameInFile("1435", "ae", idsPath)
+	require.True(t, found)
+	require.True(t, exact)
+	assert.Equal(t, "AMD Custom GPU 0932", name)
+	assert.Equal(t, "AMD Custom GPU 0932", normalizeAmdgpuName(name))
+
+	// " Graphics" suffix is trimmed by normalizeAmdgpuName
+	name2 := "AMD Radeon 860M Graphics"
+	assert.Equal(t, "AMD Radeon 860M", normalizeAmdgpuName(name2))
+}
