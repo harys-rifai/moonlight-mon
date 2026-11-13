@@ -25,7 +25,7 @@ export function FooterRepoLink() {
 				className="text-muted-foreground hover:text-foreground duration-75"
 				rel="noopener"
 			>
-				Moonlight apps {globalThis.MOONLIGHT.HUB_VERSION}
+				Moonlight apps {globalThis.MOONLIGHT?.HUB_VERSION ?? ""}
 			</a>
 			{newVersion?.v && (
 				<>

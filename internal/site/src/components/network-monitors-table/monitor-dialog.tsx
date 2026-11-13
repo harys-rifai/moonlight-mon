@@ -27,7 +27,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ChevronDownIcon, GlobeIcon, ListIcon, type LucideIcon, PlusIcon, SearchIcon, ServerIcon } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { $systems } from "@/lib/stores"
-import { cn, supportsNetworkMonitors } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { formatMonitorFields, getMonitorTarget, isHttpsTarget, parseMonitorFields } from "@/lib/network-monitor-utils"
 import type { NetworkMonitorRecord } from "@/types"
 import * as v from "valibot"
@@ -850,13 +850,20 @@ function MonitorDialogContent({
 								<SelectValue placeholder={t`Select a system`} />
 							</SelectTrigger>
 							<SelectContent>
-								{systems
-									.filter((sys) => sys.id === monitor?.system || supportsNetworkMonitors(sys))
-									.map((sys) => (
-										<SelectItem key={sys.id} value={sys.id}>
-											{sys.name}
-										</SelectItem>
-									))}
+								{(() => {
+									const all = systems ?? []
+									const byId = new Map(all.map((s) => [s.id, s]))
+									if (monitor?.system && !byId.has(monitor.system)) {
+										byId.set(monitor.system, { id: monitor.system, name: monitor.system } as (typeof all)[number])
+									}
+									return Array.from(byId.values())
+										.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id))
+										.map((sys) => (
+											<SelectItem key={sys.id} value={sys.id}>
+												{sys.name || sys.id}
+											</SelectItem>
+										))
+								})()}
 							</SelectContent>
 						</Select>
 					</div>

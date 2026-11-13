@@ -13,14 +13,17 @@ export default memo(() => {
 	const [isAuth, setIsAuth] = useState<boolean | null>(null)
 	const { monitors, isLoading } = useNetworkMonitors({})
 
-	// Check if user is authenticated
 	useEffect(() => {
 		setIsAuth(!!pb.authStore.isValid)
 	}, [])
 
+	useEffect(() => {
+		document.title = `${t`Network Monitors`} / Moonlight apps`
+	}, [t])
+
 	if (isAuth === null) {
 		return (
-			<div className="flex h-full items-center justify-center">
+			<div className="flex min-h-[50vh] items-center justify-center p-6 text-sm text-muted-foreground">
 				<Trans>Loading...</Trans>
 			</div>
 		)
@@ -28,7 +31,7 @@ export default memo(() => {
 
 	if (!isAuth) {
 		return (
-			<div className="flex h-full flex-col items-center justify-center gap-4">
+			<div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 p-6 text-sm text-muted-foreground">
 				<Trans>Please log in to view monitors</Trans>
 				<Button onClick={() => navigate(getPagePath($router, "settings", { name: "general" }))}>
 					<Trans>Log In</Trans>
@@ -37,14 +40,10 @@ export default memo(() => {
 		)
 	}
 
-	useEffect(() => {
-		document.title = `${t`Network Monitors`} / Moonlight apps`
-	}, [t])
-
 	return (
-		<>
+		<div className="flex flex-col gap-4 pb-4">
 			<NetworkMonitorsTableNew monitors={monitors} isLoading={isLoading} />
 			<FooterRepoLink />
-		</>
+		</div>
 	)
 })

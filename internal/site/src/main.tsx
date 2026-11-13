@@ -112,13 +112,21 @@ const Layout = () => {
 					<div className="container">
 						<Navbar />
 					</div>
-					<div className="container relative">
-						<Suspense>
+					<div className="container relative pb-8">
+						<Suspense fallback={null}>
 							<ActiveAlerts className="mb-4" />
 						</Suspense>
-						<App />
+						<Suspense
+							fallback={
+								<div className="flex h-[50vh] items-center justify-center text-sm text-muted-foreground">
+									Loading...
+								</div>
+							}
+						>
+							<App />
+						</Suspense>
 						{copyContent && (
-							<Suspense>
+							<Suspense fallback={null}>
 								<CopyToClipboardDialog content={copyContent} />
 							</Suspense>
 						)}
