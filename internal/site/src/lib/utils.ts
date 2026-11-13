@@ -432,7 +432,8 @@ export function compareSemVer(a: SemVer, b: SemVer) {
 const MIN_NETWORK_MONITOR_AGENT_VERSION = parseSemVer("0.20.0")
 
 export function supportsNetworkMonitors(system: Pick<SystemRecord, "info">) {
-	return compareSemVer(parseSemVer(system.info?.v), MIN_NETWORK_MONITOR_AGENT_VERSION) >= 0
+	if (!system?.info?.v) return false
+	return compareSemVer(parseSemVer(system.info.v), MIN_NETWORK_MONITOR_AGENT_VERSION) >= 0
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: any is used to allow any function to be passed in

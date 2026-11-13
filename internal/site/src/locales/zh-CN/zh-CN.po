@@ -782,6 +782,7 @@ msgstr "每日"
 #: src/components/navbar.tsx
 #: src/components/navbar.tsx
 #: src/components/routes/databases.tsx
+#: src/components/routes/databases.tsx
 msgid "Databases"
 msgstr ""
 
@@ -1500,12 +1501,12 @@ msgid "No"
 msgstr "否"
 
 #: src/components/routes/databases.tsx
-#~ msgid "No databases found."
-#~ msgstr ""
+msgid "No databases found."
+msgstr ""
 
 #: src/components/routes/databases.tsx
-msgid "No databases found. Add monitors below."
-msgstr ""
+#~ msgid "No databases found. Add monitors below."
+#~ msgstr ""
 
 #: src/components/routes/system/storage-pools-table.tsx
 msgid "No detail data for this pool."
