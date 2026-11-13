@@ -782,7 +782,6 @@ msgstr "Hàng ngày"
 #: src/components/navbar.tsx
 #: src/components/navbar.tsx
 #: src/components/routes/databases.tsx
-#: src/components/routes/databases.tsx
 msgid "Databases"
 msgstr ""
 
@@ -1501,7 +1500,11 @@ msgid "No"
 msgstr "Không"
 
 #: src/components/routes/databases.tsx
-msgid "No databases found."
+#~ msgid "No databases found."
+#~ msgstr ""
+
+#: src/components/routes/databases.tsx
+msgid "No databases found. Add monitors below."
 msgstr ""
 
 #: src/components/routes/system/storage-pools-table.tsx

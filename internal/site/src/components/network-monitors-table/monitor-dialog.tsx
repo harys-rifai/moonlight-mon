@@ -243,7 +243,7 @@ export function SystemMultiSelect({
 	const systems = useStore($systems)
 	const { t } = useLingui()
 	const options = systems
-		.filter((system) => (systemIds ? systemIds.includes(system.id) : supportsNetworkMonitors(system)))
+		.filter((system) => (systemIds ? systemIds.includes(system.id) : true))
 		.map((system) => ({ id: system.id, label: system.name }))
 	return (
 		<MultiSelect
@@ -498,7 +498,8 @@ export function AddMonitorDialog({ systemId, monitors }: { systemId?: string; mo
 	const { toast } = useToast()
 	const { t } = useLingui()
 	const systems = useStore($systems)
-	const hasEligibleSystems = systemId ? true : systems.some(supportsNetworkMonitors)
+	// Database/TCP monitors don't require agent version, so any system qualifies.
+	const hasEligibleSystems = systemId ? true : systems.length > 0
 
 	const resetBulkForm = () => {
 		setBulkInput("")
