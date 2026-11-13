@@ -16,9 +16,8 @@ export default memo(() => {
 	const systems = useStore($allSystemsById)
 
 	// Filter to database protocol monitors only (by port, since protocol is "tcp")
+	// Database monitors are TCP checks and don't require agent version support.
 	const visibleMonitors = monitors.filter((monitor) => {
-		const system = systems[monitor.system]
-		if (!system || !supportsNetworkMonitors(system)) return false
 		return DATABASE_PORTS.has(monitor.port)
 	})
 
