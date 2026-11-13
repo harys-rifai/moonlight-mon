@@ -4,12 +4,14 @@ import { $newVersion } from "@/lib/stores"
 import { Separator } from "./ui/separator"
 import { Trans } from "@lingui/react/macro"
 
+const REPO_URL = "https://github.com/harys-rifai/moonlight-mon"
+
 export function FooterRepoLink() {
 	const newVersion = useStore($newVersion)
 	return (
 		<div className="flex gap-1.5 justify-end items-center pe-3 sm:pe-6 mt-3.5 mb-4 text-xs opacity-80">
 			<a
-				href="https://github.com/henrygd/beszel"
+				href={REPO_URL}
 				target="_blank"
 				className="flex items-center gap-0.5 text-muted-foreground hover:text-foreground duration-75"
 				rel="noopener"
@@ -18,12 +20,12 @@ export function FooterRepoLink() {
 			</a>
 			<Separator orientation="vertical" className="h-2.5 bg-muted-foreground opacity-70" />
 			<a
-				href="https://github.com/henrygd/beszel/releases"
+				href={REPO_URL}
 				target="_blank"
 				className="text-muted-foreground hover:text-foreground duration-75"
 				rel="noopener"
 			>
-				Moonlight apps {globalThis.BESZEL.HUB_VERSION}
+				Moonlight apps {globalThis.MOONLIGHT.HUB_VERSION}
 			</a>
 			{newVersion?.v && (
 				<>

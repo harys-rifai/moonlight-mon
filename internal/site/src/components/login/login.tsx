@@ -21,7 +21,7 @@ export default function () {
 	// Load once on mount; switching between login routes reuses the result.
 	useEffect(() => {
 		const controller = new AbortController()
-		const autoLogin = !!globalThis.BESZEL.AUTO_LOGIN
+		const autoLogin = !!globalThis.MOONLIGHT.AUTO_LOGIN
 		// keep the title neutral while automatic authentication may still succeed
 		document.title = autoLogin ? "Moonlight apps" : `${t`Login`} / Moonlight apps`
 		loadLogin(

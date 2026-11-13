@@ -22,7 +22,7 @@ import type { AlertInfo, AlertRecord, AlertUnit, SystemRecord } from "@/types"
 
 const Slider = lazy(() => import("@/components/ui/slider"))
 
-const endpoint = "/api/beszel/user-alerts"
+const endpoint = "/api/moonlight/user-alerts"
 
 const alertDebounce = 400
 

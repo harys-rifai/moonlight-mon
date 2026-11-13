@@ -265,7 +265,7 @@ async function getLogsHtml(container: ContainerRecord): Promise<string> {
 	try {
 		const [{ highlighter }, logsHtml] = await Promise.all([
 			import("@/lib/shiki"),
-			pb.send<{ logs: string }>("/api/beszel/containers/logs", {
+			pb.send<{ logs: string }>("/api/moonlight/containers/logs", {
 				system: container.system,
 				container: container.id,
 			}),
@@ -287,7 +287,7 @@ async function getInfoHtml(container: ContainerRecord): Promise<string> {
 	try {
 		let [{ highlighter }, { info }] = await Promise.all([
 			import("@/lib/shiki"),
-			pb.send<{ info: string }>("/api/beszel/containers/info", {
+			pb.send<{ info: string }>("/api/moonlight/containers/info", {
 				system: container.system,
 				container: container.id,
 			}),

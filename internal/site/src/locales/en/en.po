@@ -13,9 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#. placeholder {0}: emptyMessage ?? "No results."
 #. placeholder {0}: title ?? "Network Monitors"
-#: src/components/network-monitors-table/network-monitors-table.tsx
 #: src/components/network-monitors-table/network-monitors-table.tsx
 msgid "{0}"
 msgstr "{0}"
@@ -1306,10 +1304,17 @@ msgstr "Load Avg"
 msgid "Load state"
 msgstr "Load state"
 
+#: src/components/routes/databases.tsx
+#: src/components/routes/monitors.tsx
 #: src/components/systemd-table/systemd-table.tsx
 #: src/components/systemd-table/systemd-table.tsx
 msgid "Loading..."
 msgstr "Loading..."
+
+#: src/components/routes/databases.tsx
+#: src/components/routes/monitors.tsx
+msgid "Log In"
+msgstr "Log In"
 
 #: src/components/navbar.tsx
 #: src/components/navbar.tsx
@@ -1519,6 +1524,7 @@ msgstr "No results found."
 #: src/components/containers-table/containers-table.tsx
 #: src/components/containers-table/containers-table.tsx
 #: src/components/containers-table/containers-table.tsx
+#: src/components/network-monitors-table/network-monitors-table.tsx
 #: src/components/routes/settings/alerts-history-data-table.tsx
 #: src/components/routes/system/package-updates-table.tsx
 #: src/components/routes/system/smart-table.tsx
@@ -1744,6 +1750,14 @@ msgstr "Please enable pop-ups for this site"
 #: src/lib/api.ts
 msgid "Please log in again"
 msgstr "Please log in again"
+
+#: src/components/routes/databases.tsx
+msgid "Please log in to view databases"
+msgstr "Please log in to view databases"
+
+#: src/components/routes/monitors.tsx
+msgid "Please log in to view monitors"
+msgstr "Please log in to view monitors"
 
 #: src/components/login/auth-form.tsx
 msgid "Please see <0>the documentation</0> for instructions."

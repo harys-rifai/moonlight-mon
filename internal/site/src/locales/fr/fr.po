@@ -18,9 +18,7 @@ msgstr ""
 "X-Crowdin-File: /main/internal/site/src/locales/en/en.po\n"
 "X-Crowdin-File-ID: 32\n"
 
-#. placeholder {0}: emptyMessage ?? "No results."
 #. placeholder {0}: title ?? "Network Monitors"
-#: src/components/network-monitors-table/network-monitors-table.tsx
 #: src/components/network-monitors-table/network-monitors-table.tsx
 msgid "{0}"
 msgstr ""
@@ -1311,10 +1309,17 @@ msgstr "Charge moy."
 msgid "Load state"
 msgstr "État de charge"
 
+#: src/components/routes/databases.tsx
+#: src/components/routes/monitors.tsx
 #: src/components/systemd-table/systemd-table.tsx
 #: src/components/systemd-table/systemd-table.tsx
 msgid "Loading..."
 msgstr "Chargement..."
+
+#: src/components/routes/databases.tsx
+#: src/components/routes/monitors.tsx
+msgid "Log In"
+msgstr ""
 
 #: src/components/navbar.tsx
 #: src/components/navbar.tsx
@@ -1524,6 +1529,7 @@ msgstr "Aucun résultat trouvé."
 #: src/components/containers-table/containers-table.tsx
 #: src/components/containers-table/containers-table.tsx
 #: src/components/containers-table/containers-table.tsx
+#: src/components/network-monitors-table/network-monitors-table.tsx
 #: src/components/routes/settings/alerts-history-data-table.tsx
 #: src/components/routes/system/package-updates-table.tsx
 #: src/components/routes/system/smart-table.tsx
@@ -1749,6 +1755,14 @@ msgstr "Veuillez activer les pop-ups pour ce site"
 #: src/lib/api.ts
 msgid "Please log in again"
 msgstr "Veuillez vous reconnecter"
+
+#: src/components/routes/databases.tsx
+msgid "Please log in to view databases"
+msgstr ""
+
+#: src/components/routes/monitors.tsx
+msgid "Please log in to view monitors"
+msgstr ""
 
 #: src/components/login/auth-form.tsx
 msgid "Please see <0>the documentation</0> for instructions."

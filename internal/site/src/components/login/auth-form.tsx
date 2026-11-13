@@ -108,7 +108,7 @@ export function UserAuthForm({
 						setErrors({ passwordConfirm: msg })
 						return
 					}
-					await pb.send("/api/beszel/create-user", {
+					await pb.send("/api/moonlight/create-user", {
 						method: "POST",
 						body: JSON.stringify({ email, password }),
 					})
@@ -147,7 +147,7 @@ export function UserAuthForm({
 	function loginWithOauth(provider: AuthProviderInfo, forcePopup = false) {
 		setIsOauthLoading(true)
 
-		if (globalThis.BESZEL.OAUTH_DISABLE_POPUP) {
+		if (globalThis.MOONLIGHT.OAUTH_DISABLE_POPUP) {
 			redirectToOauthProvider(provider)
 			return
 		}

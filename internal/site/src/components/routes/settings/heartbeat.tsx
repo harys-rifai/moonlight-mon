@@ -35,7 +35,7 @@ export default function HeartbeatSettings() {
 	async function fetchStatus() {
 		try {
 			setIsLoading(true)
-			const res = await pb.send<HeartbeatStatus>("/api/beszel/heartbeat-status", {})
+			const res = await pb.send<HeartbeatStatus>("/api/moonlight/heartbeat-status", {})
 			setStatus(res)
 		} catch (error: unknown) {
 			toast({
@@ -51,7 +51,7 @@ export default function HeartbeatSettings() {
 	async function sendTestHeartbeat() {
 		setIsTesting(true)
 		try {
-			const res = await pb.send<{ err: string | false }>("/api/beszel/test-heartbeat", {
+			const res = await pb.send<{ err: string | false }>("/api/moonlight/test-heartbeat", {
 				method: "POST",
 			})
 			if ("err" in res && !res.err) {

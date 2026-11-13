@@ -95,7 +95,7 @@ export default function NetworkMonitorsTableNew({
 	emptyMessage?: string
 }) {
 	const sortSettingsKey = systemId ? "monitorSortModeSystem" : "monitorSortMode"
-	const sortStorageKey = `besz-sort-np-target-${systemId ? 1 : 0}`
+	const sortStorageKey = `moonlight-sort-np-target-${systemId ? 1 : 0}`
 	const [sorting, setSorting] = useState<SortingState>(
 		() =>
 			$userSettings.get()[sortSettingsKey] ??
@@ -105,7 +105,7 @@ export default function NetworkMonitorsTableNew({
 	)
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 	const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
-		() => $userSettings.get().monitorCols ?? JSON.parse(localStorage.getItem("besz-monitor-cols") || "{}")
+		() => $userSettings.get().monitorCols ?? JSON.parse(localStorage.getItem("moonlight-monitor-cols") || "{}")
 	)
 	const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
 	const [globalFilter, setGlobalFilter] = useState("")
@@ -136,7 +136,7 @@ export default function NetworkMonitorsTableNew({
 		(updater: VisibilityState | ((prev: VisibilityState) => VisibilityState)) => {
 			setColumnVisibility((prev) => {
 				const next = typeof updater === "function" ? updater(prev) : updater
-				localStorage.setItem("besz-monitor-cols", JSON.stringify(next))
+				localStorage.setItem("moonlight-monitor-cols", JSON.stringify(next))
 				$userSettings.setKey("monitorCols", next)
 				queueUserSettings({ monitorCols: next })
 				return next
@@ -460,6 +460,7 @@ export default function NetworkMonitorsTableNew({
 					rowSelection={rowSelection}
 					isLoading={isLoading}
 					includesAllSystems={!systemId}
+					emptyMessage={emptyMessage}
 				/>
 			</div>
 			<DataTablePagination table={table} />
@@ -475,6 +476,7 @@ const NetworkMonitorsTable = memo(function NetworkMonitorTable({
 	rowSelection,
 	isLoading,
 	includesAllSystems,
+	emptyMessage,
 }: {
 	table: TableType<NetworkMonitorRecord>
 	rows: Row<NetworkMonitorRecord>[]
@@ -484,6 +486,7 @@ const NetworkMonitorsTable = memo(function NetworkMonitorTable({
 	isLoading: boolean
 	/** The table lists every system's monitors, so the sheet can compare without fetching. */
 	includesAllSystems: boolean
+	emptyMessage?: string
 }) {
 	const [sheetOpen, setSheetOpen] = useState(false)
 	const [activeMonitorId, setActiveMonitorId] = useState<string | null>(null)
@@ -519,7 +522,7 @@ const NetworkMonitorsTable = memo(function NetworkMonitorTable({
 								{isLoading ? (
 									<LoaderCircleIcon className="animate-spin size-10 opacity-60 mx-auto" />
 								) : (
-									<Trans>{emptyMessage ?? "No results."}</Trans>
+									emptyMessage ?? <Trans>No results.</Trans>
 								)}
 							</TableCell>
 						</TableRow>

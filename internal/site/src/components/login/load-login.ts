@@ -20,7 +20,7 @@ export async function loadLogin(
 ) {
 	const [{ firstRun }, authMethods] = await Promise.all([
 		pb
-			.send<{ firstRun: boolean }>("/api/beszel/first-run", { signal, requestKey: null })
+			.send<{ firstRun: boolean }>("/api/moonlight/first-run", { signal, requestKey: null })
 			.catch(() => ({ firstRun: false })),
 		pb.collection("users").listAuthMethods({ signal, requestKey: null }),
 	])

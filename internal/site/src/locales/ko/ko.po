@@ -18,9 +18,7 @@ msgstr ""
 "X-Crowdin-File: /main/internal/site/src/locales/en/en.po\n"
 "X-Crowdin-File-ID: 32\n"
 
-#. placeholder {0}: emptyMessage ?? "No results."
 #. placeholder {0}: title ?? "Network Monitors"
-#: src/components/network-monitors-table/network-monitors-table.tsx
 #: src/components/network-monitors-table/network-monitors-table.tsx
 msgid "{0}"
 msgstr ""
@@ -1311,10 +1309,17 @@ msgstr "부하 평균"
 msgid "Load state"
 msgstr "로드 상태"
 
+#: src/components/routes/databases.tsx
+#: src/components/routes/monitors.tsx
 #: src/components/systemd-table/systemd-table.tsx
 #: src/components/systemd-table/systemd-table.tsx
 msgid "Loading..."
 msgstr "로딩 중..."
+
+#: src/components/routes/databases.tsx
+#: src/components/routes/monitors.tsx
+msgid "Log In"
+msgstr ""
 
 #: src/components/navbar.tsx
 #: src/components/navbar.tsx
@@ -1524,6 +1529,7 @@ msgstr "결과가 없습니다."
 #: src/components/containers-table/containers-table.tsx
 #: src/components/containers-table/containers-table.tsx
 #: src/components/containers-table/containers-table.tsx
+#: src/components/network-monitors-table/network-monitors-table.tsx
 #: src/components/routes/settings/alerts-history-data-table.tsx
 #: src/components/routes/system/package-updates-table.tsx
 #: src/components/routes/system/smart-table.tsx
@@ -1749,6 +1755,14 @@ msgstr "이 사이트에 대해 팝업을 활성화하세요."
 #: src/lib/api.ts
 msgid "Please log in again"
 msgstr "다시 로그인하세요."
+
+#: src/components/routes/databases.tsx
+msgid "Please log in to view databases"
+msgstr ""
+
+#: src/components/routes/monitors.tsx
+msgid "Please log in to view monitors"
+msgstr ""
 
 #: src/components/login/auth-form.tsx
 msgid "Please see <0>the documentation</0> for instructions."

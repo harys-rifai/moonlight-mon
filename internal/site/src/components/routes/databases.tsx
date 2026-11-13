@@ -1,4 +1,4 @@
-import { useLingui } from "@lingui/react/macro"
+import { useLingui, Trans } from "@lingui/react/macro"
 import { memo, useEffect, useState } from "react"
 import NetworkMonitorsTableNew from "@/components/network-monitors-table/network-monitors-table"
 import { FooterRepoLink } from "@/components/footer-repo-link"

@@ -190,7 +190,7 @@ const ShoutrrrUrlCard = ({ url, onUrlChange, onRemove }: ShoutrrrUrlCardProps) =
 	const sendTestNotification = async () => {
 		setIsLoading(true)
 		try {
-			const res = await pb.send("/api/beszel/test-notification", { method: "POST", body: { url } })
+			const res = await pb.send("/api/moonlight/test-notification", { method: "POST", body: { url } })
 			if ("err" in res && !res.err) {
 				toast({
 					title: t`Test notification sent`,

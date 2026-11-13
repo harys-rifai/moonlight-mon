@@ -3,7 +3,7 @@ import type { Unit, Os, BatteryState, HourFormat, ConnectionType, ServiceStatus,
 
 // global window properties
 declare global {
-	var BESZEL: {
+	var MOONLIGHT: {
 		BASE_PATH: string
 		HUB_VERSION: string
 		HUB_URL: string
@@ -227,7 +227,7 @@ export interface ZfsVdev {
 	checksumErrs?: number
 }
 
-/** pending package update from GET /api/beszel/package-updates */
+/** pending package update from GET /api/moonlight/package-updates */
 export interface PackageUpdate {
 	name: string
 	/** installed version, missing if unknown */
@@ -671,7 +671,7 @@ export interface SystemdServiceDetails {
 	WantsMountsFor: any[]
 }
 
-export interface BeszelInfo {
+export interface MoonlightInfo {
 	key: string // public key
 	v: string // version
 	cu: boolean // check updates

@@ -37,7 +37,7 @@ const syntaxTheme = "github-dark-dimmed"
 async function getSystemdLogsHtml(systemId: string, serviceName: string): Promise<string> {
 	const [{ highlighter }, { logs }] = await Promise.all([
 		import("@/lib/shiki"),
-		pb.send<{ logs: string }>("/api/beszel/systemd/logs", {
+		pb.send<{ logs: string }>("/api/moonlight/systemd/logs", {
 			requestKey: null,
 			query: { system: systemId, service: serviceName },
 		}),
@@ -307,7 +307,7 @@ function SystemdSheet({
 		setDetails(null)
 		setIsLoading(true)
 
-		pb.send<{ details: SystemdServiceDetails }>("/api/beszel/systemd/info", {
+		pb.send<{ details: SystemdServiceDetails }>("/api/moonlight/systemd/info", {
 			query: {
 				system: targetSystemId,
 				service: service.name,

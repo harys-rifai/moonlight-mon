@@ -171,10 +171,10 @@ func isTrustedProxy(prefixes []netip.Prefix, remoteAddr string) bool {
 // registerApiRoutes registers custom API routes
 func (h *Hub) registerApiRoutes(se *core.ServeEvent) error {
 	// auth protected routes
-	apiAuth := se.Router.Group("/api/beszel")
+	apiAuth := se.Router.Group("/api/moonlight")
 	apiAuth.Bind(apis.RequireAuth())
 	// auth optional routes
-	apiNoAuth := se.Router.Group("/api/beszel")
+	apiNoAuth := se.Router.Group("/api/moonlight")
 
 	// create first user endpoint only needed if no users exist
 	if totalUsers, _ := se.App.CountRecords("users"); totalUsers == 0 {

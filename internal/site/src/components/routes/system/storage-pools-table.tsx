@@ -516,7 +516,7 @@ export default function ZfsTable({ systemId }: { systemId?: string }) {
 
 	const refreshSystem = useCallback(async (systemId: string) => {
 		try {
-			await pb.send("/api/beszel/zfs/refresh", {
+			await pb.send("/api/moonlight/zfs/refresh", {
 				method: "POST",
 				query: { system: systemId },
 			})

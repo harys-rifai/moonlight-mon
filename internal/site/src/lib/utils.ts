@@ -357,7 +357,7 @@ export const generateToken = () => {
 }
 
 /** Get the hub URL from the global BESZEL object */
-export const getHubURL = () => globalThis.BESZEL?.HUB_URL || window.location.origin
+export const getHubURL = () => globalThis.MOONLIGHT?.HUB_URL || window.location.origin
 
 /** Map of system IDs to their corresponding tokens (used to avoid fetching in add-system dialog) */
 export const tokenMap = new Map<SystemRecord["id"], FingerprintRecord["token"]>()

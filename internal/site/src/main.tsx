@@ -24,13 +24,14 @@ import {
 	defaultLayoutWidth,
 } from "@/lib/stores.ts"
 import * as systemsManager from "@/lib/systemsManager.ts"
-import type { BeszelInfo, UpdateInfo } from "./types"
+import type { MoonlightInfo, UpdateInfo } from "./types"
 
 const LoginPage = lazy(() => import("@/components/login/login.tsx"))
 const Home = lazy(() => import("@/components/routes/home.tsx"))
 const Containers = lazy(() => import("@/components/routes/containers.tsx"))
 const Smart = lazy(() => import("@/components/routes/smart.tsx"))
 const Monitors = lazy(() => import("@/components/routes/monitors.tsx"))
+const Databases = lazy(() => import("@/components/routes/databases.tsx"))
 const SystemDetail = lazy(() => import("@/components/routes/system.tsx"))
 const CopyToClipboardDialog = lazy(() => import("@/components/copy-to-clipboard.tsx"))
 const ActiveAlerts = lazy(() => import("@/components/active-alerts.tsx").then((m) => ({ default: m.ActiveAlerts })))
@@ -44,11 +45,11 @@ const App = memo(() => {
 			$authenticated.set(pb.authStore.isValid)
 		})
 		// get general info for authenticated users, such as public key and version
-		pb.send<BeszelInfo>("/api/beszel/info", {}).then((data) => {
+		pb.send<MoonlightInfo>("/api/moonlight/info", {}).then((data) => {
 			$publicKey.set(data.key)
 			// check for updates if enabled
 			if (data.cu && isAdmin()) {
-				pb.send<UpdateInfo>("/api/beszel/update", {}).then($newVersion.set)
+				pb.send<UpdateInfo>("/api/moonlight/update", {}).then($newVersion.set)
 			}
 		})
 		// get user settings
@@ -83,6 +84,8 @@ const App = memo(() => {
 		return <Smart />
 	} else if (page.route === "monitors") {
 		return <Monitors />
+	} else if (page.route === "databases") {
+		return <Databases />
 	} else if (page.route === "settings") {
 		return <Settings />
 	}
