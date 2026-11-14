@@ -32,6 +32,7 @@ const Containers = lazy(() => import("@/components/routes/containers.tsx"))
 const Smart = lazy(() => import("@/components/routes/smart.tsx"))
 const Monitors = lazy(() => import("@/components/routes/monitors.tsx"))
 const Databases = lazy(() => import("@/components/routes/databases.tsx"))
+const DatabaseHealth = lazy(() => import("@/components/routes/database-health.tsx"))
 const SystemDetail = lazy(() => import("@/components/routes/system.tsx"))
 const CopyToClipboardDialog = lazy(() => import("@/components/copy-to-clipboard.tsx"))
 const ActiveAlerts = lazy(() => import("@/components/active-alerts.tsx").then((m) => ({ default: m.ActiveAlerts })))
@@ -86,6 +87,8 @@ const App = memo(() => {
 		return <Monitors />
 	} else if (page.route === "databases") {
 		return <Databases />
+	} else if (page.route === "db_health") {
+		return <DatabaseHealth />
 	} else if (page.route === "settings") {
 		return <Settings />
 	}

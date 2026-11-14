@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/henrygd/beszel/internal/alerts"
+	"github.com/henrygd/beszel/internal/dbobs"
 	"github.com/henrygd/beszel/internal/email"
 	"github.com/henrygd/beszel/internal/hub/config"
 	"github.com/henrygd/beszel/internal/hub/heartbeat"
@@ -102,6 +103,8 @@ func (h *Hub) StartHub() error {
 		if h.hb != nil {
 			go h.hb.Start(h.hbStop)
 		}
+		// start database observability collector
+		go dbobs.Start(h.App, h.NotifyDBAlert)
 		return e.Next()
 	})
 
