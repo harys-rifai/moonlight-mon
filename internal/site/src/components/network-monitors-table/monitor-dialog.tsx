@@ -32,7 +32,7 @@ import { formatMonitorFields, getMonitorTarget, isHttpsTarget, parseMonitorField
 import type { NetworkMonitorRecord } from "@/types"
 import * as v from "valibot"
 
-type MonitorProtocol = "icmp" | "tcp" | "http" | "dns"
+type MonitorProtocol = "icmp" | "tcp" | "http" | "dns" | "telnet"
 
 type MonitorValues = {
 	system: string
@@ -52,7 +52,7 @@ type BulkMonitorLineSource = Pick<NetworkMonitorRecord, "target" | "protocol" | 
 
 const defaultInterval = 30
 
-const MonitorProtocolSchema = v.picklist(["icmp", "tcp", "http", "dns"])
+const MonitorProtocolSchema = v.picklist(["icmp", "tcp", "http", "dns", "telnet"])
 
 const MonitorIntervalSchema = v.pipe(v.string(), v.toNumber(), v.minValue(1), v.maxValue(3600))
 

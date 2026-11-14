@@ -9,6 +9,7 @@ Originally forked from **Beszel**, now rebranded as **Moonlight apps**.
 - **PostgreSQL backend** — Runs on PostgreSQL instead of SQLite
 - **Database monitoring** — Dedicated Databases page at `/databases` for PostgreSQL, MySQL, Redis, SQL Server, Oracle, DB2, Aerospike, and more
 - **Network monitoring** — TCP port checks for any service on any host
+- **Telnet protocol support** — Monitor services using telnet protocol for legacy application compatibility
 - **System monitoring** — CPU, memory, disk, temperature, bandwidth, GPU, load average, battery, containers, systemd, ZFS, SMART
 - **Alerts** — Threshold-based alerts for metrics and network monitor failures
 - **Realtime updates** — PostgreSQL LISTEN/NOTIFY for live dashboard updates
@@ -62,6 +63,25 @@ ENV=dev
 5. Start the Go backend on port `8090`
 
 Access the dashboard at **http://localhost:8090**
+
+### Network Monitoring Configuration
+
+Configure response monitoring from this agent with the following settings:
+
+- **System**: local-machine
+- **Target**: 127.0.0.1
+- **Protocol**: TCP (also supports Telnet for legacy applications)
+- **Port**: 5008
+- **Interval**: 30 seconds by each data table and column
+
+Configure response monitoring from this agent:
+
+- System: local-machine
+- Target: 127.0.0.1
+- Protocol: TCP
+- Port: 5008
+- Interval (seconds): 30 by each data table and column
+- Additional protocol telnet to connect to database
 
 ### Login
 
