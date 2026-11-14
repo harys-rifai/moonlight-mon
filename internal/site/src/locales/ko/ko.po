@@ -1786,6 +1786,7 @@ msgstr "풀 사용량"
 
 #: src/components/add-system.tsx
 #: src/components/network-monitors-table/monitor-dialog.tsx
+#: src/components/network-monitors-table/monitor-dialog.tsx
 msgid "Port"
 msgstr "포트"
 

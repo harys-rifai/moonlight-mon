@@ -2,8 +2,6 @@
 
 Monitoring dashboard for your infrastructure — PostgreSQL, Redis, databases, servers, and network services.
 
-Originally forked from **Beszel**, now rebranded as **Moonlight apps**.
-
 ## Features
 
 - **PostgreSQL backend** — Runs on PostgreSQL instead of SQLite
@@ -135,23 +133,11 @@ Server/
 │   │   ├── index.go            # Backtick to double-quote fix
 │   │   └── json.go             # json_valid removal for PostgreSQL
 │   └── migrations/           # Database migrations
-└── migrations/               # Beszel-specific migrations
+└── migrations/           # Database migrations
     ├── initial-settings.go   # Default app name: "Moonlight apps"
     └── ...
 ```
-
-## Key Changes from Beszel
-
-| Area | Change |
-|------|--------|
-| Name | Beszel → Moonlight apps |
-| Database | SQLite → PostgreSQL |
-| Frontend proxy | Vite dev server auto-started by `run.sh` |
-| Databases page | New `/databases` route for database port monitoring |
-| Navbar | Added Databases menu item |
-| PostgreSQL extensions | `pgcrypto`, `nocase` collation, `uuid_generate_v7`, `hex`, `randomblob` pre-created before migrations |
-| JSON functions | `json_extract` → `#>>` operator for PostgreSQL JSONB |
-| Index syntax | Backticks → double quotes for PostgreSQL compatibility |
+```
 
 ## Database Monitoring
 
@@ -168,23 +154,3 @@ The Databases page (`/databases`) shows network monitors filtered by common data
 | Aerospike | 3000 |
 
 Add monitors via the **Monitors** page or directly in the Databases table using TCP protocol.
-
-## Production Build
-
-For production, build without the `development` build tag:
-
-```bash
-go build -o beszel-hub ./internal/cmd/hub
-./beszel-hub serve --http=0.0.0.0:8090
-```
-
-Build the frontend for production:
-
-```bash
-cd internal/site
-npm run build
-```
-
-## License
-
-MIT
