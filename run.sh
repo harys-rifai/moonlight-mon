@@ -20,6 +20,10 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
     . "$SCRIPT_DIR/.env"
     set +a
 fi
+# Set default DATABASE_URL if not set (for new devices without .env)
+if [ -z "${DATABASE_URL}" ]; then
+    DATABASE_URL=postgres://postgres:Password09@localhost:5006/server?sslmode=disable
+fi
 
 # Set POSTGRES_URL from DATABASE_URL for the fondoger postgres fork
 export POSTGRES_URL="${DATABASE_URL}"
