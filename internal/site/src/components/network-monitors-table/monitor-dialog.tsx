@@ -92,23 +92,23 @@ const NormalizedMonitorValuesSchema = v.pipe(
 		}
 		}),
 	v.forward(
-		v.check((input) => {
-			if (input.protocol === "icmp" || input.protocol === "http" || input.protocol === "dns") {
-				return input.port === 0
-			}
+			v.check((input) => {
+				if (input.protocol === "icmp" || input.protocol === "http" || input.protocol === "dns") {
+					return input.port === 0
+				}
 
-			return Number.isInteger(input.port) && input.port >= 1 && input.port <= 65535
-		}, "Port must be between 1 and 65535"),
-		["port"]
-	),
-	// Resolving an IP literal returns it without querying anything, so the check would measure nothing.
-	v.forward(
-		v.check(
-			(input) => input.protocol !== "dns" || !isIpAddress(input.target),
-			"DNS target must be a domain name; put the resolver's IP in DNS Server"
+				return Number.isInteger(input.port) && input.port >= 1 && input.port <= 65535
+			}, "Port must be between 1 and 65535"),
+			["port"]
 		),
-		["target"]
-	)
+		// For telnet, port must be between 1 and 65535 (no zero allowed)
+		v.forward(
+			v.check(
+				(input) => input.protocol !== "telnet" || input.port >= 1 && input.port <= 65535,
+				"Telnet port must be between 1 and 65535"
+			),
+			["port"]
+		)
 )
 
 function isIpAddress(value: string) {
@@ -811,13 +811,13 @@ function MonitorDialogContent({
 					system: targetSystems[0],
 					target,
 					protocol,
-					port: protocol === "tcp" ? Number(port) : 0,
-					server: protocol === "dns" ? server.trim() : "",
-					interval: monitorInterval,
-					skipTlsVerify,
-				},
-				monitor ? monitor.enabled : true
-			)
+				port: protocol === "tcp" ? Number(port) : (protocol === "telnet" ? (port ? Number(port) : 23) : 0),
+				server: protocol === "dns" ? server.trim() : "",
+				interval: monitorInterval,
+				skipTlsVerify,
+			},
+			monitor ? monitor.enabled : true
+		)
 			if (monitor) {
 				await pb.collection("network_monitors").update(monitor.id, payload)
 			} else {
@@ -929,21 +929,36 @@ function MonitorDialogContent({
 						</SelectContent>
 					</Select>
 				</div>
-				{protocol === "tcp" && (
-					<div className="grid gap-2">
-						<Label>
-							<Trans>Port</Trans>
-						</Label>
-						<Input
-							type="number"
-							value={port}
-							onChange={(e) => setPort(e.target.value)}
-							placeholder="443"
-							min={1}
-							max={65535}
-						/>
-					</div>
-				)}
+			{protocol === "tcp" && (
+				<div className="grid gap-2">
+					<Label>
+						<Trans>Port</Trans>
+					</Label>
+					<Input
+						type="number"
+						value={port}
+						onChange={(e) => setPort(e.target.value)}
+						placeholder="443"
+						min={1}
+						max={65535}
+					/>
+				</div>
+			)}
+			{protocol === "telnet" && (
+				<div className="grid gap-2">
+					<Label>
+						<Trans>Port</Trans>
+					</Label>
+					<Input
+						type="number"
+						value={port}
+						onChange={(e) => setPort(e.target.value)}
+						placeholder="23"
+						min={1}
+						max={65535}
+					/>
+				</div>
+			)}
 				{protocol === "dns" && (
 					<div className="grid gap-2">
 						<Label>
