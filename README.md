@@ -27,15 +27,19 @@ Originally forked from **Beszel**, now rebranded as **Moonlight apps**.
 Copy the environment file and adjust as needed:
 
 ```bash
-cp .env.example .env   # if .env.example exists
+# If .env exists, it will be loaded automatically by run.sh
+# On new devices without .env, run.sh auto-generates default credentials
+cp .env .env.backup 2>/dev/null || true
 # or edit .env directly
 ```
+
+If `.env` does not exist, `run.sh` will auto-set default PostgreSQL credentials (user: `postgres`, password: `Password09`, port: `5006`, database: `server`).
 
 Example `.env`:
 
 ```ini
 # Database connection (PostgreSQL)
-DATABASE_URL=postgres://postgres@localhost:5006/server?sslmode=disable
+DATABASE_URL=postgres://postgres:Password09@localhost:5006/server?sslmode=disable
 
 # App URL
 APP_URL=http://localhost:8090

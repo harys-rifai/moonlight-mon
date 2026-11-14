@@ -43,7 +43,7 @@ if [ -f "$SITE_DIR/package.json" ]; then
     # Install frontend dependencies if not already installed
     if [ ! -d "$SITE_DIR/node_modules" ]; then
         echo "Installing frontend dependencies..."
-        (cd "$SITE_DIR" && npm install)
+        (cd "$SITE_DIR" && npm install --legacy-peer-deps)
     fi
 
     # Compile translations (.po -> .ts) required by vite dev server
@@ -67,4 +67,4 @@ fi
 
 # Use dev build tag so migrations auto-generate and the dev web server proxy is used.
 # For production, drop the development tag and build the production binary.
-exec go run -tags development ./internal/cmd/hub "$@"
+exec "C:\Program Files\Go\bin\go.exe" run -tags development ./internal/cmd/hub "$@"
