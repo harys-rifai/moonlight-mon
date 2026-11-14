@@ -72,6 +72,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import ChartTimeSelect from "@/components/charts/chart-time-select"
+import DatabaseDetailSection from "@/components/database-detail-section"
 import { LossChart, AvgMinMaxResponseChart, ResponseChart } from "@/components/routes/system/charts/monitors-charts"
 import { getMonitorCompareState } from "@/lib/monitor-compare"
 import { useCompareMonitors, useNetworkMonitorStats } from "@/lib/use-network-monitors"
@@ -87,12 +88,14 @@ export default function NetworkMonitorsTableNew({
 	isLoading,
 	title,
 	emptyMessage,
+	showDatabaseType,
 }: {
 	systemId?: string
 	monitors: NetworkMonitorRecord[]
 	isLoading: boolean
 	title?: string
 	emptyMessage?: string
+	showDatabaseType?: boolean
 }) {
 	const sortSettingsKey = systemId ? "monitorSortModeSystem" : "monitorSortMode"
 	const sortStorageKey = `moonlight-sort-np-target-${systemId ? 1 : 0}`
@@ -249,11 +252,16 @@ export default function NetworkMonitorsTableNew({
 			onEdit: setEditingMonitor,
 			onDelete: handleDeleteRequest,
 			onSetEnabled: handleSetEnabled,
+			showDatabaseType,
 		})
 		columns = systemId ? columns.filter((col) => col.id !== "system") : columns
+		if (showDatabaseType) {
+			// Certificate state is HTTP-specific noise on the database list.
+			columns = columns.filter((col) => col.id !== "certificate")
+		}
 		columns = canManageMonitors ? columns : columns.filter((col) => col.id !== "actions")
 		return columns
-	}, [canManageMonitors, handleDeleteRequest, handleSetEnabled, systemId])
+	}, [canManageMonitors, handleDeleteRequest, handleSetEnabled, systemId, showDatabaseType])
 
 	const table = useReactTable({
 		data: monitors,
@@ -827,6 +835,7 @@ function NetworkMonitorSheetContent({
 							/>
 						</>
 					)}
+					<DatabaseDetailSection monitor={monitor} />
 				</div>
 			</SheetContent>
 		</Sheet>

@@ -35,6 +35,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useMemo } from "react"
 import { formatBulkMonitorLine } from "@/components/network-monitors-table/monitor-dialog"
 import { Badge } from "../ui/badge"
+import { ENGINE_LABELS, PORT_ENGINES, normalizeHost } from "@/lib/database-monitors"
+import { $dbCollectorStats } from "@/lib/db-collector-stats"
+
+/** Key used to look up collector metrics for a monitor row. */
+const collectorKey = (monitor: NetworkMonitorRecord) =>
+	`${normalizeHost(monitor.target)}:${monitor.port}`
 import {
 	getCertDaysLeft,
 	getCertExpiryLevel,
@@ -78,10 +84,12 @@ export function getMonitorColumns({
 	onEdit,
 	onDelete,
 	onSetEnabled,
+	showDatabaseType,
 }: {
 	onEdit?: (monitor: NetworkMonitorRecord) => void
 	onDelete?: (monitors: NetworkMonitorRecord[]) => void | Promise<void>
 	onSetEnabled?: (monitors: NetworkMonitorRecord[], enabled: boolean) => void | Promise<void>
+	showDatabaseType?: boolean
 } = {}): ColumnDef<NetworkMonitorRecord>[] {
 	return [
 		{
@@ -165,6 +173,57 @@ export function getMonitorColumns({
 				)
 			},
 		},
+		...(showDatabaseType
+			? ([
+					{
+						id: "db_type",
+						meta: { label: t`Type` },
+						enableSorting: false,
+						header: t`Type`,
+						cell: ({ row }: CellContext<NetworkMonitorRecord, unknown>) => {
+							const monitor = row.original
+							if (monitor.protocol === "telnet") {
+								return <Badge variant="secondary">Telnet</Badge>
+							}
+							const engine = PORT_ENGINES[monitor.port]
+							if (!engine) {
+								return <span className="text-muted-foreground">-</span>
+							}
+							return <Badge variant="secondary">{ENGINE_LABELS[engine] ?? engine}</Badge>
+						},
+					},
+					{
+						id: "slow_queries",
+						meta: { label: t`Slow` },
+						enableSorting: false,
+						header: t`Slow queries`,
+						cell: ({ row }: CellContext<NetworkMonitorRecord, unknown>) => {
+							const stats = useStore($dbCollectorStats)[collectorKey(row.original)]
+							if (!stats) return <span className="text-muted-foreground">-</span>
+							return (
+								<span className={cn("tabular-nums", stats.slow > 0 && "text-amber-600 dark:text-amber-400")}>
+									{stats.slow}
+								</span>
+							)
+						},
+					},
+					{
+						id: "locks",
+						meta: { label: t`Locks` },
+						enableSorting: false,
+						header: t`Locks`,
+						cell: ({ row }: CellContext<NetworkMonitorRecord, unknown>) => {
+							const stats = useStore($dbCollectorStats)[collectorKey(row.original)]
+							if (!stats) return <span className="text-muted-foreground">-</span>
+							return (
+								<span className={cn("tabular-nums", stats.locks > 0 && "text-red-600 dark:text-red-400")}>
+									{stats.locks}
+								</span>
+							)
+						},
+					},
+				] as ColumnDef<NetworkMonitorRecord>[])
+			: []),
 		{
 			id: "protocol",
 			meta: { label: t`Protocol` },

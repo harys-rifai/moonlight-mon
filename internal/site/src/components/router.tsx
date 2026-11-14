@@ -6,7 +6,6 @@ const routes = {
 	smart: "/smart",
 	monitors: "/monitors",
 	databases: "/databases",
-	db_health: "/db-health",
 	system: `/system/:id`,
 	settings: `/settings/:name?`,
 	forgot_password: `/forgot-password`,

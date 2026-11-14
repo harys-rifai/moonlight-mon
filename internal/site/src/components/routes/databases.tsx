@@ -3,16 +3,19 @@ import { memo, useEffect, useState } from "react"
 import NetworkMonitorsTableNew from "@/components/network-monitors-table/network-monitors-table"
 import { FooterRepoLink } from "@/components/footer-repo-link"
 import { useNetworkMonitors } from "@/lib/use-network-monitors"
-import { pb } from "@/lib/api"
+import { pb, isAdmin } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { $router, navigate } from "@/components/router"
 import { getPagePath } from "@nanostores/router"
 import { isDatabaseMonitor } from "@/lib/database-monitors"
+import { useDbCollectorStats } from "@/lib/db-collector-stats"
+import AddDatabaseTarget from "@/components/add-database-target"
 
 export default memo(() => {
 	const { t } = useLingui()
 	const [isAuth, setIsAuth] = useState<boolean | null>(null)
 	const { monitors, isLoading } = useNetworkMonitors({})
+	useDbCollectorStats()
 
 	useEffect(() => {
 		setIsAuth(!!pb.authStore.isValid)
@@ -45,23 +48,17 @@ export default memo(() => {
 
 	return (
 		<div className="flex flex-col gap-4 pb-4">
-			<div className="flex justify-end">
-				<a
-					href={getPagePath($router, "db_health")}
-					className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-					onClick={(e) => {
-						e.preventDefault()
-						navigate(getPagePath($router, "db_health"))
-					}}
-				>
-					<Trans>Database health</Trans> →
-				</a>
-			</div>
+			{isAdmin() && (
+				<div className="flex justify-end">
+					<AddDatabaseTarget />
+				</div>
+			)}
 			<NetworkMonitorsTableNew
 				monitors={visibleMonitors}
 				isLoading={isLoading}
 				title={t`Databases`}
 				emptyMessage={t`No databases found.`}
+				showDatabaseType
 			/>
 			<FooterRepoLink />
 		</div>

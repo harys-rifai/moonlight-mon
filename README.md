@@ -165,9 +165,7 @@ Add monitors via the **Monitors** page or directly in the Databases table using 
 
 ## Database Observability
 
-Adopted from `obs.md`: a collector-driven module for database health, capacity, and alerting.
-
-- **Page** — `/db-health` (navbar "Database Health").
+Adopted from `obs.md`: a collector-driven module for database health, capacity, and alerting. The engine detail is shown inside the monitor sheet when you click a row on the **Databases** page (`/databases`), which is the single source of the database list.
 - **Inventory** — `db_inventory` stores name, application, environment, engine, host/port, database, credentials, owner, HA mode, cloud provider, group. Passwords are stored in a hidden field and never returned by the API.
 - **Collector** — runs every 60s in the hub and records into `db_metrics`: availability, version, uptime, connections (total/active/idle/max/usage), long-running queries (>5 min), blocked sessions, lock wait, replication lag, database size, oldest transaction.
 - **Alerting** — `db_alert_rules` holds warning/critical thresholds (defaults below); `db_alerts` follows the `new → warning → critical → acknowledged → resolved` lifecycle and can be acknowledged/resolved from the page.
@@ -184,7 +182,16 @@ Adopted from `obs.md`: a collector-driven module for database health, capacity, 
 | oldest_tx_sec | 300 | 900 |
 | down | - | any |
 
-PostgreSQL targets are collected natively. MySQL, SQL Server, and Oracle are supported as inventory entries today; their SQL collectors are the next phase from `obs.md` (MySQL also needs a driver dependency).
+PostgreSQL targets are collected natively. MySQL/MariaDB, Redis, SQL Server, and Oracle also have collectors (drivers: `go-sql-driver/mysql`, RESP for Redis, `go-mssqldb`, `go-ora`). DB2 is inventory/TCP-monitor only until the IBM CLI driver is added.
+
+| Engine | Collected detail |
+|--------|------------------|
+| PostgreSQL | TPS/QPS, slow queries, locks, cache hit, temp/WAL, deadlocks, `pg_stat_statements` or live slow statements |
+| MySQL / MariaDB | Questions/s, commits, threads, row-lock waits, deadlocks, buffer-pool hit, slow processlist, database size |
+| Redis | Ops/s, clients, blocked clients, memory, keyspace hit ratio, slowlog, keys/evictions |
+| SQL Server | Sessions, running/blocked requests, cumulative executions, max wait, top statements by elapsed time, database size |
+| Oracle | User sessions, blocking sessions, executes/commits, enqueues, buffer cache hit ratio, top SQL by elapsed time, datafile size |
+| DB2 | Inventory + TCP availability (SQL collector pending) |
 
 ### Deep PostgreSQL metrics
 
