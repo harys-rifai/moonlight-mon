@@ -70,7 +70,7 @@ const NormalizedMonitorValuesSchema = v.pipe(
 	v.transform((input): NormalizedMonitorValues => {
 		let { protocol, port } = input
 		let httpTarget = input.target
-		if (protocol === "icmp" || protocol === "http" || protocol === "dns") {
+		if (protocol === "icmp" || protocol === "http" || protocol === "dns" || protocol === "telnet") {
 			if (protocol === "http") {
 				httpTarget = normalizeHttpTarget(input.target, port)
 			}
@@ -90,7 +90,7 @@ const NormalizedMonitorValuesSchema = v.pipe(
 			// Only HTTPS targets use TLS; clear it for everything else.
 			skipTlsVerify: protocol === "http" && isHttpsTarget(httpTarget) && input.skipTlsVerify,
 		}
-	}),
+		}),
 	v.forward(
 		v.check((input) => {
 			if (input.protocol === "icmp" || input.protocol === "http" || input.protocol === "dns") {
@@ -201,7 +201,15 @@ function parseBulkMonitorLine(line: string, lineNumber: number, system: string) 
 	}
 	const protocol = (parsed.output.protocol?.toLowerCase() ||
 		(/^https?:\/\//i.test(parsed.output.target) ? "http" : "icmp")) as MonitorProtocol
-
+	
+	// Map telnet protocol name and set default port
+	if (protocol === "telnet") {
+		// telnet defaults to port 23
+		if (!parsed.output.port) {
+			parsed.output.port = "23"
+		}
+	}
+	
 	return buildMonitorPayload({
 		system,
 		target: parsed.output.target,
@@ -214,7 +222,7 @@ function parseBulkMonitorLine(line: string, lineNumber: number, system: string) 
 }
 
 export function formatBulkMonitorLine(monitor: BulkMonitorLineSource) {
-	const port = monitor.protocol !== "tcp" || monitor.port === 443 ? "" : `${monitor.port}`
+	const port = monitor.protocol !== "tcp" || monitor.protocol === "telnet" || monitor.port === 443 ? "" : `${monitor.port}`
 	const interval = monitor.interval === defaultInterval ? "" : `${monitor.interval}`
 	const server = monitor.protocol !== "dns" ? "" : monitor.server
 	return formatMonitorFields(trimTrailingEmptyFields([monitor.target, monitor.protocol, port, interval, server]))
@@ -465,22 +473,22 @@ function MultiSelect<T extends MultiSelectOption>({
 						<output className="block px-2.5 py-3 text-sm text-muted-foreground">{emptyText}</output>
 					)}
 					{filteredOptions.map((option) => (
-						<DropdownMenuCheckboxItem
-							key={option.id}
-							checked={selectedIds.has(option.id)}
-							disabled={!canSelectMore && !selectedIds.has(option.id)}
-							onSelect={(event) => event.preventDefault()}
-							onCheckedChange={(checked) => {
-								const next = new Set(selectedIds)
-								if (checked) next.add(option.id)
-								else next.delete(option.id)
-								onChange(next)
-							}}
-							className="group min-w-0 gap-2.5 py-2 ps-2.5"
-							indicatorClassName="static size-4 shrink-0 rounded border border-input group-data-[state=checked]:border-primary group-data-[state=checked]:bg-primary group-data-[state=checked]:text-primary-foreground [&_svg]:size-3"
-						>
-							{renderOption(option)}
-						</DropdownMenuCheckboxItem>
+			<DropdownMenuCheckboxItem
+				key={option.id}
+				checked={selectedIds.has(option.id)}
+				disabled={!canSelectMore && !selectedIds.has(option.id)}
+				onSelect={(event) => event.preventDefault()}
+				onCheckedChange={(checked) => {
+					const next = new Set(selectedIds)
+					if (checked) next.add(option.id)
+					else next.delete(option.id)
+					onChange(next)
+				}}
+				className="group min-w-0 gap-2.5 py-2 ps-2.5"
+				indicatorClassName="static size-4 shrink-0 rounded border border-input group-data-[state=checked]:border-primary group-data-[state=checked]:bg-primary group-data-[state=checked]:text-primary-foreground [&_svg]:size-3"
+			>
+				{renderOption(option)}
+			</DropdownMenuCheckboxItem>
 					))}
 				</div>
 			</DropdownMenuContent>
@@ -754,13 +762,24 @@ function MonitorDialogContent({
 	const dnsTargetIsIp = protocol === "dns" && isIpAddress(target.trim())
 	// Bare hostnames are normalized to https, so they can also skip verification.
 	const usesTls = protocol === "http" && !/^http:\/\//i.test(target.trim())
-
+	
+	// Sync protocol with telnet port - ensure telnet defaults to port 23
+	useEffect(() => {
+		if (protocol === "telnet") {
+			if (!port && !monitor?.port) {
+				setPort("23")
+			} else if (monitor?.port && !port) {
+				setPort(String(monitor.port))
+			}
+		}
+	}, [protocol, port, monitor?.port])
+	
 	// When the dialog is opened, initialize form fields with monitor values (if editing) or defaults (if adding).
 	useEffect(() => {
 		if (!open) {
 			return
 		}
-
+	
 		setProtocol(monitor?.protocol ?? "icmp")
 		setTarget(monitor?.target ?? "")
 		setPort(monitor?.protocol === "tcp" && monitor.port ? String(monitor.port) : "")
@@ -771,6 +790,13 @@ function MonitorDialogContent({
 		setSelectedSystemIds(new Set())
 		setLoading(false)
 	}, [open, monitor])
+	
+	// Update port when protocol changes
+	useEffect(() => {
+		if (protocol === "telnet" && !port && !monitor?.port) {
+			setPort("23")
+		}
+	}, [protocol, port, monitor?.port])
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault()
@@ -899,6 +925,7 @@ function MonitorDialogContent({
 							<SelectItem value="tcp">TCP</SelectItem>
 							<SelectItem value="http">HTTP</SelectItem>
 							<SelectItem value="dns">DNS</SelectItem>
+							<SelectItem value="telnet">Telnet</SelectItem>
 						</SelectContent>
 					</Select>
 				</div>

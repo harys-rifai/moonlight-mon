@@ -51,14 +51,15 @@ declare module "@tanstack/react-table" {
 }
 
 const protocolColors: Record<string, string> = {
-	icmp: "bg-blue-500/15! text-blue-600 dark:text-blue-400",
-	tcp: "bg-purple-500/15! text-purple-600 dark:text-purple-400",
-	http: "bg-teal-500/15! text-teal-700 dark:text-teal-400",
-	https: "bg-green-500/15! text-green-700 dark:text-green-400",
-	dns: "bg-amber-500/15! text-amber-600 dark:text-amber-400",
-	// HTTP monitors that skip TLS certificate verification
-	insecure: "bg-orange-500/15! text-orange-600 dark:text-orange-400",
-}
+		icmp: "bg-blue-500/15! text-blue-600 dark:text-blue-400",
+		tcp: "bg-purple-500/15! text-purple-600 dark:text-purple-400",
+		http: "bg-teal-500/15! text-teal-700 dark:text-teal-400",
+		https: "bg-green-500/15! text-green-700 dark:text-green-400",
+		dns: "bg-amber-500/15! text-amber-600 dark:text-amber-400",
+		telnet: "bg-orange-500/15! text-orange-600 dark:text-orange-400",
+		// HTTP monitors that skip TLS certificate verification
+		insecure: "bg-red-500/15! text-red-600 dark:text-red-400",
+	}
 
 const SYSTEM_STATUS_COLORS = {
 	[SystemStatus.Up]: "bg-green-500",
@@ -373,6 +374,7 @@ const responseTimeThresholds = {
 	tcp: { warning: 500_000, critical: 2_000_000 },
 	icmp: { warning: 100_000, critical: 500_000 },
 	dns: { warning: 150_000, critical: 800_000 },
+	telnet: { warning: 200_000, critical: 1_000_000 },
 }
 
 function responseTimeCell(cell: CellContext<NetworkMonitorRecord, unknown>) {
