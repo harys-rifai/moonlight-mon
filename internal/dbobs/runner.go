@@ -58,25 +58,23 @@ func runOnce(app core.App, notify Notifier) {
 		if !item.GetBool("enabled") {
 			continue
 		}
-		if engine := item.GetString("engine"); engine != "" && engine != "postgres" {
-			// Only PostgreSQL has a collector in this build; others are inventory-only.
-			continue
-		}
 		sampleDatabase(app, item, rules, notify)
 	}
 }
 
 func sampleDatabase(app core.App, item *core.Record, rules map[string]rule, notify Notifier) {
-	dsn := DSN(
-		item.GetString("host"),
-		item.GetInt("port"),
-		item.GetString("dbname"),
-		item.GetString("username"),
-		item.GetString("password"),
-		item.GetString("sslmode"),
-	)
+	target := Target{
+		Engine:   item.GetString("engine"),
+		Host:     item.GetString("host"),
+		Port:     item.GetInt("port"),
+		Database: item.GetString("dbname"),
+		Username: item.GetString("username"),
+		Password: item.GetString("password"),
+		SSLMode:  item.GetString("sslmode"),
+	}
 
-	metrics, samples, collectErr := CollectPostgres(context.Background(), dsn)
+	samples := []QuerySample{}
+	metrics, collectErr := Collect(context.Background(), target, &samples)
 	now := time.Now()
 	message := ""
 	if collectErr != nil {
@@ -139,7 +137,7 @@ func sampleDatabase(app core.App, item *core.Record, rules map[string]rule, noti
 	record.Set("deadlocks_rate", round2(rates.deadlocks))
 	record.Set("temp_bytes_rate", round2(rates.tempBytes))
 	record.Set("wal_bytes_rate", round2(rates.walBytes))
-	record.Set("details", map[string]any{"error": message, "interval_sec": round2(dt)})
+	record.Set("details", mergeDetails(metrics.Details, map[string]any{"error": message, "interval_sec": round2(dt), "engine": target.Engine}))
 	if err := app.Save(record); err != nil {
 		app.Logger().Error("dbobs: failed to save metrics", "err", err, "db", item.GetString("name"))
 	}
@@ -370,4 +368,16 @@ func upper(value string) string {
 		return value
 	}
 	return string(value[0]-32) + value[1:]
+}
+
+// mergeDetails combines engine extras with the common collection metadata.
+func mergeDetails(engineDetails map[string]any, meta map[string]any) map[string]any {
+	merged := map[string]any{}
+	for key, value := range engineDetails {
+		merged[key] = value
+	}
+	for key, value := range meta {
+		merged[key] = value
+	}
+	return merged
 }

@@ -55,6 +55,9 @@ type Metrics struct {
 	BlkReadTimeMs float64
 	BlkWriteTime  float64
 	CacheHitRatio float64
+
+	// Details holds engine-specific extras persisted as JSON.
+	Details map[string]any
 }
 
 // DSN builds a PostgreSQL connection string for an inventory record.
