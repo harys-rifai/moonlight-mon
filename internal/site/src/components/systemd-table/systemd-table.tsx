@@ -28,7 +28,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/compon
 import { pb } from "@/lib/api"
 import { ServiceStatus, ServiceStatusLabels, type ServiceSubState, ServiceSubStateLabels } from "@/lib/enums"
 import { $allSystemsById } from "@/lib/stores"
-import { cn, decimalString, formatBytes, useBrowserStorage } from "@/lib/utils"
+import { APP_TIMEZONE, cn, decimalString, formatBytes, useBrowserStorage } from "@/lib/utils"
 import type { SystemdRecord, SystemdServiceDetails } from "@/types"
 import { Separator } from "../ui/separator"
 
@@ -437,7 +437,7 @@ function SystemdSheet({
 		// systemd timestamps are in microseconds, convert to milliseconds for JavaScript Date
 		const date = new Date(timestamp / 1000)
 		if (Number.isNaN(date.getTime())) return undefined
-		return date.toLocaleString()
+		return date.toLocaleString(undefined, { timeZone: APP_TIMEZONE })
 	}
 
 	const activeStateValue = (() => {

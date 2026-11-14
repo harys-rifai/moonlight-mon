@@ -3,15 +3,17 @@
 package agent
 
 import (
-	_ "embed"
+	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 )
 
-//go:embed smartmontools/smartctl.exe
-var embeddedSmartctl []byte
+// Embed the smartmontools directory so the agent builds without the binaries staged.
+// When go generate downloads smartctl.exe it is embedded too; SMART stays optional.
+//go:embed all:smartmontools
+var smartctlFs embed.FS
 
 var (
 	smartctlOnce sync.Once
@@ -27,8 +29,14 @@ func ensureEmbeddedSmartctl() (string, error) {
 			return
 		}
 
+		data, err := smartctlFs.ReadFile("smartmontools/smartctl.exe")
+		if err != nil {
+			smartctlErr = fmt.Errorf("embedded smartctl not available (run go generate ./agent): %w", err)
+			return
+		}
+
 		destPath := filepath.Join(destDir, "smartctl.exe")
-		if err := os.WriteFile(destPath, embeddedSmartctl, 0o755); err != nil {
+		if err := os.WriteFile(destPath, data, 0o755); err != nil {
 			smartctlErr = fmt.Errorf("failed to write embedded smartctl: %w", err)
 			return
 		}

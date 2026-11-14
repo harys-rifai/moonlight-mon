@@ -6,6 +6,10 @@ import { lingui } from "@lingui/vite-plugin"
 
 export default defineConfig({
 	base: "./",
+	define: {
+		// Display timezone for the dashboard. Set APP_TIMEZONE in the repo .env to override.
+		__APP_TIMEZONE__: JSON.stringify(process.env.APP_TIMEZONE || "Asia/Jakarta"),
+	},
 	plugins: [
 		react({
 			babel: {

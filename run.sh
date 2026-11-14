@@ -25,6 +25,12 @@ if [ -z "${DATABASE_URL}" ]; then
     DATABASE_URL=postgres://postgres:Password09@localhost:5006/server?sslmode=disable
 fi
 
+# App defaults for new devices / fresh clones
+export APP_URL="${APP_URL:-http://localhost:8090}"
+# Dashboard and server timezone (Asia/Jakarta = WIB, UTC+7)
+export APP_TIMEZONE="${APP_TIMEZONE:-Asia/Jakarta}"
+export TZ="${TZ:-$APP_TIMEZONE}"
+
 # Set POSTGRES_URL from DATABASE_URL for the fondoger postgres fork
 export POSTGRES_URL="${DATABASE_URL}"
 # Use the database name from the URL for both data and aux (single database setup)
@@ -67,4 +73,14 @@ fi
 
 # Use dev build tag so migrations auto-generate and the dev web server proxy is used.
 # For production, drop the development tag and build the production binary.
-exec "C:\Program Files\Go\bin\go.exe" run -tags development ./internal/cmd/hub "$@"
+# Resolve Go from PATH so this script works on any device after cloning.
+if command -v go >/dev/null 2>&1; then
+    GO_BIN="go"
+elif [ -x "/c/Program Files/Go/bin/go.exe" ]; then
+    GO_BIN="/c/Program Files/Go/bin/go.exe"
+else
+    echo "Go not found. Install Go or set GO_BIN to the go executable." >&2
+    exit 1
+fi
+
+exec "$GO_BIN" run -tags development ./internal/cmd/hub "$@"

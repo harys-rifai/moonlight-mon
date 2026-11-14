@@ -33,12 +33,16 @@ export async function copyToClipboard(content: string) {
 	}
 }
 
+// Dashboard timestamps are always shown in this timezone, regardless of browser locale.
+export const APP_TIMEZONE = typeof __APP_TIMEZONE__ !== "undefined" ? __APP_TIMEZONE__ : "Asia/Jakarta"
+
 // Create formatters directly without intermediate containers
 const createHourWithMinutesFormatter = (hour12?: boolean) =>
 	new Intl.DateTimeFormat(undefined, {
 		hour: "numeric",
 		minute: "numeric",
 		hour12,
+		timeZone: APP_TIMEZONE,
 	})
 
 const createShortDateFormatter = (hour12?: boolean) =>
@@ -48,6 +52,7 @@ const createShortDateFormatter = (hour12?: boolean) =>
 		hour: "numeric",
 		minute: "numeric",
 		hour12,
+		timeZone: APP_TIMEZONE,
 	})
 
 const createHourWithSecondsFormatter = (hour12?: boolean) =>
@@ -56,6 +61,7 @@ const createHourWithSecondsFormatter = (hour12?: boolean) =>
 		minute: "numeric",
 		second: "numeric",
 		hour12,
+		timeZone: APP_TIMEZONE,
 	})
 
 // Initialize formatters with default values
@@ -91,6 +97,7 @@ listenKeys($userSettings, ["hourFormat"], ({ hourFormat }) => {
 const dayFormatter = new Intl.DateTimeFormat(undefined, {
 	day: "numeric",
 	month: "short",
+	timeZone: APP_TIMEZONE,
 })
 export const formatDay = (timestamp: string) => {
 	return dayFormatter.format(new Date(timestamp))

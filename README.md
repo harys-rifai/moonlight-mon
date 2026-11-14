@@ -32,7 +32,7 @@ cp .env .env.backup 2>/dev/null || true
 # or edit .env directly
 ```
 
-If `.env` does not exist, `run.sh` will auto-set default PostgreSQL credentials (user: `postgres`, password: `Password09`, port: `5006`, database: `server`).
+If `.env` does not exist, `run.sh` auto-applies defaults (PostgreSQL user `postgres`, password `Password09`, port `5006`, database `server`, timezone `Asia/Jakarta`), so a fresh clone runs without manual setup. `.env.example` documents every variable.
 
 Example `.env`:
 
@@ -45,7 +45,15 @@ APP_URL=http://localhost:8090
 
 # Environment mode (dev enables auto-migration and development build tag)
 ENV=dev
+
+# Dashboard and server timezone (Asia/Jakarta = WIB, UTC+7)
+APP_TIMEZONE=Asia/Jakarta
+TZ=Asia/Jakarta
 ```
+
+### Timezone
+
+All dashboard times, chart labels, logs, and cleanup schedules use `APP_TIMEZONE` (default `Asia/Jakarta`, WIB / UTC+7). Database records are stored in UTC and converted for display, so changing the timezone never rewrites stored data.
 
 ### Run the server
 

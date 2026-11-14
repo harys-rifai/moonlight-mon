@@ -23,6 +23,9 @@ import (
 )
 
 func main() {
+	// Use the configured dashboard timezone for server-side dates (logs, schedules).
+	initTimezone()
+
 	// handle health check first to prevent unneeded execution
 	if len(os.Args) > 3 && os.Args[1] == "health" {
 		url := os.Args[3]
@@ -49,6 +52,26 @@ func main() {
 	if err := hub.StartHub(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// initTimezone points time.Local at APP_TIMEZONE (default Asia/Jakarta) so server
+// logs and schedules use the same clock as the dashboard. Records stay in UTC.
+func initTimezone() {
+	name := strings.TrimSpace(os.Getenv("APP_TIMEZONE"))
+	if name == "" {
+		name = strings.TrimSpace(os.Getenv("TZ"))
+	}
+	if name == "" {
+		name = "Asia/Jakarta"
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		log.Printf("invalid APP_TIMEZONE %q, falling back to Asia/Jakarta: %v", name, err)
+		if loc, err = time.LoadLocation("Asia/Jakarta"); err != nil {
+			return
+		}
+	}
+	time.Local = loc
 }
 
 // getBaseApp creates a new PocketBase app with the default config

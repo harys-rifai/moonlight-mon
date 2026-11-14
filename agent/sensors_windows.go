@@ -40,7 +40,10 @@ type lhmProcess struct {
 	tempDir              string
 }
 
-//go:embed all:lhm/bin/Release/net48
+// Embed the LHM project so the agent builds on machines without the .NET SDK.
+// When lhm/bin/Release/net48 exists (built with `go generate`), it is embedded too.
+// LHM sensors stay opt-in via LHM=true, so a source-only embed is harmless.
+//go:embed all:lhm
 var lhmFs embed.FS
 
 var (
