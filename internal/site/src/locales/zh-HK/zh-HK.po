@@ -775,6 +775,11 @@ msgstr "週期"
 msgid "Daily"
 msgstr "每日"
 
+#: src/components/navbar.tsx
+#: src/components/navbar.tsx
+msgid "Database Health"
+msgstr ""
+
 #: src/components/command-palette.tsx
 #: src/components/navbar.tsx
 #: src/components/navbar.tsx

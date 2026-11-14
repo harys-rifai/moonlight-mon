@@ -775,6 +775,11 @@ msgstr "사이클"
 msgid "Daily"
 msgstr "매일"
 
+#: src/components/navbar.tsx
+#: src/components/navbar.tsx
+msgid "Database Health"
+msgstr ""
+
 #: src/components/command-palette.tsx
 #: src/components/navbar.tsx
 #: src/components/navbar.tsx

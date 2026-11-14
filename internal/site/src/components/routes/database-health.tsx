@@ -1,73 +1,64 @@
+import { getPagePath } from "@nanostores/router"
+import { ActivityIcon, DatabaseIcon, ExternalLinkIcon, GaugeIcon, ShieldAlertIcon, ZapIcon } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
-import { DatabaseIcon, RefreshCwIcon, PlusIcon, ShieldAlertIcon } from "lucide-react"
-import { pb, isAdmin } from "@/lib/api"
-import { formatBytes } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/components/ui/table"
-import { useToast } from "@/components/ui/use-toast"
 import { FooterRepoLink } from "@/components/footer-repo-link"
+import NetworkMonitorsTableNew from "@/components/network-monitors-table/network-monitors-table"
+import { Link, $router } from "@/components/router"
+import { Badge } from "@/components/ui/badge"
+import { buttonVariants } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { pb } from "@/lib/api"
+import { isDatabaseMonitor } from "@/lib/database-monitors"
+import { cn } from "@/lib/utils"
+import { useNetworkMonitors } from "@/lib/use-network-monitors"
 
-type DBInventory = {
+type DBObsInventory = {
 	id: string
 	name: string
-	application: string
 	environment: string
 	engine: string
 	host: string
 	port: number
-	dbname: string
-	username: string
-	password: string
-	sslmode: string
-	owner: string
-	ha_mode: string
-	cloud_provider: string
-	group_name: string
-	notes: string
-	enabled: boolean
 	version: string
 	last_error: string
+	enabled: boolean
 }
 
-type DBMetric = {
+type DBMetricPoint = {
 	id: string
 	inventory: string
 	collected: string
 	up: boolean
-	connection_usage: number
+	tps: number
+	qps: number
+	slow_queries: number
+	blocked_sessions: number
+	waiting_locks: number
+	idle_in_tx: number
+	cache_hit_ratio: number
 	connections_total: number
 	connections_max: number
-	long_queries: number
-	blocked_sessions: number
+	connection_usage: number
+	deadlocks_rate: number
+	wal_bytes_rate: number
+	temp_bytes_rate: number
 	replication_lag_sec: number
 	db_size_bytes: number
+	long_queries: number
 	oldest_tx_sec: number
+	lock_wait_sec: number
+}
+
+type DBQuerySample = {
+	id: string
+	inventory: string
+	collected: string
+	query: string
+	calls: number
+	mean_ms: number
+	total_ms: number
 }
 
 type DBAlert = {
@@ -77,335 +68,126 @@ type DBAlert = {
 	severity: string
 	status: string
 	value: number
-	message: string
 	triggered: string
 }
 
-const emptyForm = {
-	name: "",
-	application: "",
-	environment: "DEV",
-	engine: "postgres",
-	host: "localhost",
-	port: "5432",
-	dbname: "postgres",
-	username: "postgres",
-	password: "",
-	sslmode: "disable",
-	owner: "",
-	ha_mode: "",
-	cloud_provider: "",
-	group_name: "",
-	notes: "",
-	enabled: true,
-}
-
-const statusColor: Record<string, string> = {
-	critical: "bg-red-500/15 text-red-600 dark:text-red-400",
-	warning: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-	acknowledged: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-	resolved: "bg-green-500/15 text-green-700 dark:text-green-400",
-}
+const WINDOWS = [
+	{ label: "1 hour", hours: 1 },
+	{ label: "6 hours", hours: 6 },
+	{ label: "24 hours", hours: 24 },
+]
 
 export default function DatabaseHealth() {
-	const { toast } = useToast()
-	const [inventory, setInventory] = useState<DBInventory[]>([])
-	const [metrics, setMetrics] = useState<DBMetric[]>([])
+	const { monitors, isLoading } = useNetworkMonitors({})
+	const [inventory, setInventory] = useState<DBObsInventory[]>([])
 	const [alerts, setAlerts] = useState<DBAlert[]>([])
-	const [loading, setLoading] = useState(true)
-	const [open, setOpen] = useState(false)
-	const [editing, setEditing] = useState<DBInventory | null>(null)
-	const [form, setForm] = useState({ ...emptyForm })
-	const admin = isAdmin()
+	const [selectedId, setSelectedId] = useState("")
+	const [windowHours, setWindowHours] = useState(1)
+	const [series, setSeries] = useState<DBMetricPoint[]>([])
+	const [samples, setSamples] = useState<DBQuerySample[]>([])
+	const [obsError, setObsError] = useState("")
 
-	async function load() {
-		try {
-			const [inv, mets, al] = await Promise.all([
-				pb.collection("db_inventory").getFullList<DBInventory>({ sort: "name" }),
-				pb.collection("db_metrics").getFullList<DBMetric>({ sort: "-collected" }),
-				pb.collection("db_alerts").getFullList<DBAlert>({ sort: "-triggered" }),
-			])
-			setInventory(inv)
-			setMetrics(mets)
-			setAlerts(al.filter((a) => a.status !== "resolved"))
-		} catch (error) {
-			console.error("Failed to load database observability data", error)
-		} finally {
-			setLoading(false)
-		}
-	}
+	const databaseMonitors = monitors.filter(isDatabaseMonitor)
+	const responsive = databaseMonitors.filter((monitor) => (monitor.res ?? 0) > 0)
+	const downCount = databaseMonitors.length - responsive.length
+	const criticalAlerts = useMemo(
+		() => alerts.filter((alert) => alert.severity === "critical" && alert.status !== "acknowledged"),
+		[alerts]
+	)
 
 	useEffect(() => {
 		document.title = "Database Health / Moonlight apps"
-		load()
-		const timer = setInterval(load, 30000)
-		return () => clearInterval(timer)
 	}, [])
 
-	const latest = useMemo(() => {
-		const map = new Map<string, DBMetric>()
-		for (const metric of metrics) {
-			if (!map.has(metric.inventory)) map.set(metric.inventory, metric)
-		}
-		return map
-	}, [metrics])
-
-	const upCount = inventory.filter((item) => latest.get(item.id)?.up).length
-	const criticalAlerts = alerts.filter((a) => a.severity === "critical" && a.status !== "acknowledged")
-
-	function startAdd() {
-		setEditing(null)
-		setForm({ ...emptyForm })
-		setOpen(true)
-	}
-
-	function startEdit(item: DBInventory) {
-		setEditing(item)
-		setForm({
-			name: item.name ?? "",
-			application: item.application ?? "",
-			environment: item.environment || "DEV",
-			engine: item.engine || "postgres",
-			host: item.host ?? "",
-			port: String(item.port || 5432),
-			dbname: item.dbname ?? "",
-			username: item.username ?? "",
-			password: "",
-			sslmode: item.sslmode || "disable",
-			owner: item.owner ?? "",
-			ha_mode: item.ha_mode ?? "",
-			cloud_provider: item.cloud_provider ?? "",
-			group_name: item.group_name ?? "",
-			notes: item.notes ?? "",
-			enabled: item.enabled ?? true,
-		})
-		setOpen(true)
-	}
-
-	async function save() {
-		const payload = {
-			name: form.name.trim(),
-			application: form.application.trim(),
-			environment: form.environment,
-			engine: form.engine,
-			host: form.host.trim(),
-			port: Number(form.port) || 0,
-			dbname: form.dbname.trim(),
-			username: form.username.trim(),
-			sslmode: form.sslmode,
-			owner: form.owner.trim(),
-			ha_mode: form.ha_mode.trim(),
-			cloud_provider: form.cloud_provider.trim(),
-			group_name: form.group_name.trim(),
-			notes: form.notes.trim(),
-			enabled: form.enabled,
-		}
-		if (form.password) {
-			;(payload as Record<string, unknown>).password = form.password
-		}
-		try {
-			if (editing) {
-				await pb.collection("db_inventory").update(editing.id, payload)
-			} else {
-				await pb.collection("db_inventory").create(payload)
+	useEffect(() => {
+		let cancelled = false
+		async function load() {
+			try {
+				const [inv, open] = await Promise.all([
+					pb.collection("db_inventory").getFullList<DBObsInventory>({ sort: "name" }),
+					pb.collection("db_alerts").getFullList<DBAlert>({ sort: "-triggered" }),
+				])
+				if (cancelled) return
+				setInventory(inv)
+				setAlerts(open.filter((alert) => alert.status !== "resolved"))
+				setObsError("")
+			} catch (error) {
+				if (!cancelled) setObsError((error as Error)?.message ?? "Observability data unavailable")
 			}
-			setOpen(false)
-			await load()
-		} catch (error) {
-			toast({
-				variant: "destructive",
-				title: "Save failed",
-				description: (error as Error)?.message,
-			})
 		}
-	}
+		load()
+		const timer = setInterval(load, 30000)
+		return () => {
+			cancelled = true
+			clearInterval(timer)
+		}
+	}, [])
 
-	async function remove(item: DBInventory) {
-		if (!confirm(`Delete ${item.name}?`)) return
-		await pb.collection("db_inventory").delete(item.id)
-		await load()
-	}
+	useEffect(() => {
+		if (!selectedId && inventory.length > 0) {
+			setSelectedId(inventory[0].id)
+		}
+	}, [inventory, selectedId])
 
-	async function setAlertStatus(alert: DBAlert, status: "acknowledged" | "resolved") {
-		const payload: Record<string, unknown> = { status }
-		payload[status === "acknowledged" ? "acknowledged" : "resolved"] = new Date().toISOString()
-		await pb.collection("db_alerts").update(alert.id, payload)
-		await load()
-	}
+	useEffect(() => {
+		if (!selectedId) return
+		let cancelled = false
+		async function loadSeries() {
+			const since = new Date(Date.now() - windowHours * 3600 * 1000).toISOString()
+			try {
+				const [points, querySamples] = await Promise.all([
+					pb.collection("db_metrics").getFullList<DBMetricPoint>({
+						filter: `inventory="${selectedId}" && collected>="${since}"`,
+						sort: "collected",
+					}),
+					pb.collection("db_query_samples").getFullList<DBQuerySample>({
+						filter: `inventory="${selectedId}"`,
+						sort: "-collected",
+					}),
+				])
+				if (cancelled) return
+				setSeries(points)
+				const newest = querySamples[0]?.collected
+				setSamples(newest ? querySamples.filter((s) => s.collected === newest).slice(0, 5) : [])
+			} catch (error) {
+				if (!cancelled) setSeries([])
+			}
+		}
+		loadSeries()
+		const timer = setInterval(loadSeries, 30000)
+		return () => {
+			cancelled = true
+			clearInterval(timer)
+		}
+	}, [selectedId, windowHours])
+
+	const latest = series.length > 0 ? series[series.length - 1] : undefined
+	const selected = inventory.find((item) => item.id === selectedId)
 
 	return (
 		<div className="flex flex-col gap-4 pb-4">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<h1 className="text-xl font-semibold">Database Observability</h1>
+					<h1 className="text-xl font-semibold">Database Health</h1>
 					<p className="text-sm text-muted-foreground">
-						Health, connections, locks, replication, and alerts collected every minute.
+						Monitors from the Databases page, plus deep PostgreSQL performance, locking, and APM.
 					</p>
 				</div>
-				<div className="flex gap-2">
-					<Button variant="outline" size="sm" onClick={load}>
-						<RefreshCwIcon className="size-4" />
-						Refresh
-					</Button>
-					{admin && (
-						<Dialog open={open} onOpenChange={setOpen}>
-							<DialogTrigger asChild>
-								<Button size="sm" onClick={startAdd}>
-									<PlusIcon className="size-4" />
-									Add database
-								</Button>
-							</DialogTrigger>
-							<DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-								<DialogHeader>
-									<DialogTitle>{editing ? "Edit database" : "Add database"}</DialogTitle>
-								</DialogHeader>
-								<div className="grid gap-3 sm:grid-cols-2">
-									<div className="grid gap-1.5">
-										<Label>Name</Label>
-										<Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-									</div>
-									<div className="grid gap-1.5">
-										<Label>Application</Label>
-										<Input
-											value={form.application}
-											onChange={(e) => setForm({ ...form, application: e.target.value })}
-										/>
-									</div>
-									<div className="grid gap-1.5">
-										<Label>Environment</Label>
-										<Select
-											value={form.environment}
-											onValueChange={(v) => setForm({ ...form, environment: v })}
-										>
-											<SelectTrigger>
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{["PROD", "STAGING", "UAT", "DEV", "DR", "OTHER"].map((env) => (
-													<SelectItem key={env} value={env}>
-														{env}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</div>
-									<div className="grid gap-1.5">
-										<Label>Engine</Label>
-										<Select value={form.engine} onValueChange={(v) => setForm({ ...form, engine: v })}>
-											<SelectTrigger>
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{["postgres", "mysql", "sqlserver", "oracle"].map((engine) => (
-													<SelectItem key={engine} value={engine}>
-														{engine}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</div>
-									<div className="grid gap-1.5">
-										<Label>Host</Label>
-										<Input value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
-									</div>
-									<div className="grid gap-1.5">
-										<Label>Port</Label>
-										<Input
-											type="number"
-											value={form.port}
-											onChange={(e) => setForm({ ...form, port: e.target.value })}
-										/>
-									</div>
-									<div className="grid gap-1.5">
-										<Label>Database</Label>
-										<Input
-											value={form.dbname}
-											onChange={(e) => setForm({ ...form, dbname: e.target.value })}
-										/>
-									</div>
-									<div className="grid gap-1.5">
-										<Label>Username</Label>
-										<Input
-											value={form.username}
-											onChange={(e) => setForm({ ...form, username: e.target.value })}
-										/>
-									</div>
-									<div className="grid gap-1.5">
-										<Label>Password {editing && "(leave blank to keep)"}</Label>
-										<Input
-											type="password"
-											value={form.password}
-											onChange={(e) => setForm({ ...form, password: e.target.value })}
-										/>
-									</div>
-									<div className="grid gap-1.5">
-										<Label>SSL mode</Label>
-										<Select value={form.sslmode} onValueChange={(v) => setForm({ ...form, sslmode: v })}>
-											<SelectTrigger>
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{["disable", "require", "verify-full"].map((mode) => (
-													<SelectItem key={mode} value={mode}>
-														{mode}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</div>
-									<div className="grid gap-1.5">
-										<Label>Owner</Label>
-										<Input value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
-									</div>
-									<div className="grid gap-1.5">
-										<Label>HA mode</Label>
-										<Input
-											value={form.ha_mode}
-											onChange={(e) => setForm({ ...form, ha_mode: e.target.value })}
-										/>
-									</div>
-									<div className="grid gap-1.5">
-										<Label>Cloud provider</Label>
-										<Input
-											value={form.cloud_provider}
-											onChange={(e) => setForm({ ...form, cloud_provider: e.target.value })}
-										/>
-									</div>
-									<div className="grid gap-1.5">
-										<Label>Group</Label>
-										<Input
-											value={form.group_name}
-											onChange={(e) => setForm({ ...form, group_name: e.target.value })}
-										/>
-									</div>
-									<div className="flex items-center gap-2 pt-5">
-										<Switch
-											checked={form.enabled}
-											onCheckedChange={(checked) => setForm({ ...form, enabled: checked })}
-										/>
-										<Label>Collection enabled</Label>
-									</div>
-								</div>
-								<div className="flex justify-end gap-2">
-									<Button variant="ghost" onClick={() => setOpen(false)}>
-										Cancel
-									</Button>
-									<Button onClick={save} disabled={!form.name.trim() || !form.host.trim()}>
-										Save
-									</Button>
-								</div>
-							</DialogContent>
-						</Dialog>
-					)}
-				</div>
+				<Link
+					href={getPagePath($router, "databases")}
+					className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+				>
+					<ExternalLinkIcon className="size-4" /> Open Databases
+				</Link>
 			</div>
 
 			<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-				<SummaryCard title="Databases" value={String(inventory.length)} detail={`${upCount} reachable`} />
+				<SummaryCard title="Database monitors" value={String(databaseMonitors.length)} detail="Synced from /databases" />
 				<SummaryCard
-					title="Availability"
-					value={inventory.length ? `${Math.round((upCount / inventory.length) * 100)}%` : "-"}
-					detail="Latest collection cycle"
+					title="Responsive"
+					value={String(responsive.length)}
+					detail={downCount > 0 ? `${downCount} down` : "All responding"}
+					alert={downCount > 0}
 				/>
 				<SummaryCard
 					title="Open alerts"
@@ -413,17 +195,176 @@ export default function DatabaseHealth() {
 					detail={`${criticalAlerts.length} critical`}
 					alert={criticalAlerts.length > 0}
 				/>
-				<SummaryCard
-					title="Replication lag max"
-					value={`${Math.max(0, ...metrics.slice(0, 50).map((m) => m.replication_lag_sec || 0)).toFixed(0)}s`}
-					detail="Most recent samples"
-				/>
+				<SummaryCard title="Inventory" value={String(inventory.length)} detail="Observability targets" />
 			</div>
 
 			<Card>
-				<CardHeader className="flex-row items-center justify-between gap-2">
+				<CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
 					<CardTitle className="flex items-center gap-2 text-base">
-						<DatabaseIcon className="size-4" /> Inventory &amp; health
+						<GaugeIcon className="size-4" /> Performance detail
+						{selected && (
+							<span className="text-xs font-normal text-muted-foreground">
+								{selected.name} · {selected.host}:{selected.port}
+							</span>
+						)}
+					</CardTitle>
+					<div className="flex items-center gap-2">
+						<Select value={selectedId} onValueChange={setSelectedId}>
+							<SelectTrigger className="h-8 w-56">
+								<SelectValue placeholder="Select database" />
+							</SelectTrigger>
+							<SelectContent>
+								{inventory.map((item) => (
+									<SelectItem key={item.id} value={item.id}>
+										{item.name} ({item.port})
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+						<Select
+							value={String(windowHours)}
+							onValueChange={(value) => setWindowHours(Number(value))}
+						>
+							<SelectTrigger className="h-8 w-28">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{WINDOWS.map((option) => (
+									<SelectItem key={option.hours} value={String(option.hours)}>
+										{option.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-4">
+					{!selectedId ? (
+						<p className="text-sm text-muted-foreground">
+							{obsError || "No observability target yet. Register one in db_inventory to collect PostgreSQL detail."}
+						</p>
+					) : (
+						<>
+							<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+								<MetricTile
+									icon={<ZapIcon className="size-3.5" />}
+									label="TPS"
+									value={latest ? latest.tps.toFixed(1) : "-"}
+									detail={latest ? `${latest.qps.toFixed(1)} queries/s` : "waiting for sample"}
+								/>
+								<MetricTile
+									icon={<ActivityIcon className="size-3.5" />}
+									label="Slow queries"
+									value={latest ? String(latest.slow_queries) : "-"}
+									detail={latest ? `${latest.long_queries} over 5 min` : "-"}
+									alert={!!latest && latest.slow_queries > 0}
+								/>
+								<MetricTile
+									icon={<ShieldAlertIcon className="size-3.5" />}
+									label="Blocked / locks"
+									value={latest ? `${latest.blocked_sessions} / ${latest.waiting_locks}` : "-"}
+									detail={latest ? `longest wait ${latest.lock_wait_sec.toFixed(0)}s` : "-"}
+									alert={!!latest && latest.blocked_sessions > 0}
+								/>
+								<MetricTile
+									icon={<DatabaseIcon className="size-3.5" />}
+									label="Cache hit"
+									value={latest ? `${latest.cache_hit_ratio.toFixed(1)}%` : "-"}
+									detail={latest ? `${latest.connection_usage.toFixed(0)}% conn usage` : "-"}
+								/>
+							</div>
+
+							<div className="grid gap-4 lg:grid-cols-2">
+								<SparklineCard
+									title="TPS / QPS"
+									points={series.map((point) => point.tps)}
+									secondaryPoints={series.map((point) => point.qps)}
+									format={(value) => value.toFixed(1)}
+								/>
+								<SparklineCard
+									title="Slow queries (>1 min active)"
+									points={series.map((point) => point.slow_queries)}
+									format={(value) => String(Math.round(value))}
+								/>
+								<SparklineCard
+									title="Locks (blocked + waiting)"
+									points={series.map((point) => point.blocked_sessions + point.waiting_locks)}
+									format={(value) => String(Math.round(value))}
+								/>
+								<SparklineCard
+									title="Cache hit ratio (%)"
+									points={series.map((point) => point.cache_hit_ratio)}
+									format={(value) => `${value.toFixed(1)}%`}
+								/>
+							</div>
+
+							<div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+								<span>Idle in transaction: {latest ? latest.idle_in_tx : "-"}</span>
+								<span>Deadlocks/s: {latest ? latest.deadlocks_rate.toFixed(3) : "-"}</span>
+								<span>WAL bytes/s: {latest ? Math.round(latest.wal_bytes_rate) : "-"}</span>
+								<span>Temp bytes/s: {latest ? Math.round(latest.temp_bytes_rate) : "-"}</span>
+								<span>Oldest transaction: {latest ? `${latest.oldest_tx_sec.toFixed(0)}s` : "-"}</span>
+								<span>Replication lag: {latest ? `${latest.replication_lag_sec.toFixed(0)}s` : "-"}</span>
+								<span>
+									Connections: {latest ? `${latest.connections_total}/${latest.connections_max}` : "-"}
+								</span>
+								<span>Samples in window: {series.length}</span>
+							</div>
+
+							<div>
+								<h3 className="mb-2 text-sm font-medium">
+									Top statements (APM)
+									{samples.length === 0 && " — no slow statements observed and pg_stat_statements is not installed"}
+								</h3>
+								<div className="overflow-x-auto">
+									<Table>
+										<TableHeader>
+											<TableRow>
+												<TableHead>Query</TableHead>
+												<TableHead>Calls</TableHead>
+												<TableHead>Mean</TableHead>
+												<TableHead>Total</TableHead>
+											</TableRow>
+										</TableHeader>
+										<TableBody>
+											{samples.length === 0 && (
+												<TableRow>
+													<TableCell colSpan={4} className="text-center text-xs text-muted-foreground">
+														No statement samples collected.
+													</TableCell>
+												</TableRow>
+											)}
+											{samples.map((sample) => (
+												<TableRow key={sample.id}>
+													<TableCell className="max-w-[36rem] truncate font-mono text-xs" title={sample.query}>
+														{sample.query}
+													</TableCell>
+													<TableCell className="text-xs">{sample.calls}</TableCell>
+													<TableCell className="text-xs">{sample.mean_ms.toFixed(2)} ms</TableCell>
+													<TableCell className="text-xs">{sample.total_ms.toFixed(0)} ms</TableCell>
+												</TableRow>
+											))}
+										</TableBody>
+									</Table>
+								</div>
+							</div>
+						</>
+					)}
+				</CardContent>
+			</Card>
+
+			{/* Single source of truth: the exact table used by the Databases page. */}
+			<NetworkMonitorsTableNew
+				monitors={databaseMonitors}
+				isLoading={isLoading}
+				title="Databases"
+				emptyMessage="No databases found."
+			/>
+
+			<Card>
+				<CardHeader>
+					<CardTitle className="flex items-center gap-2 text-base">
+						<DatabaseIcon className="size-4" /> Observability inventory
 					</CardTitle>
 				</CardHeader>
 				<CardContent className="overflow-x-auto">
@@ -431,76 +372,35 @@ export default function DatabaseHealth() {
 						<TableHeader>
 							<TableRow>
 								<TableHead>Database</TableHead>
-								<TableHead>Env</TableHead>
+								<TableHead>Environment</TableHead>
 								<TableHead>Engine</TableHead>
 								<TableHead>Target</TableHead>
-								<TableHead>Status</TableHead>
-								<TableHead>Connections</TableHead>
-								<TableHead>Long q</TableHead>
-								<TableHead>Blocked</TableHead>
-								<TableHead>Lag</TableHead>
-								<TableHead>Size</TableHead>
-								<TableHead>Collected</TableHead>
-								{admin && <TableHead />}
+								<TableHead>Version</TableHead>
+								<TableHead>Last error</TableHead>
 							</TableRow>
 						</TableHeader>
 						<TableBody>
 							{inventory.length === 0 && (
 								<TableRow>
-									<TableCell colSpan={12} className="text-center text-sm text-muted-foreground">
-										{loading ? "Loading..." : "No databases registered yet."}
+									<TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+										{obsError || "No observability targets. Add one from the API or seed db_inventory."}
 									</TableCell>
 								</TableRow>
 							)}
-							{inventory.map((item) => {
-								const metric = latest.get(item.id)
-								return (
-									<TableRow key={item.id}>
-										<TableCell className="font-medium">
-											{item.name}
-											<div className="text-xs text-muted-foreground">{item.application || "-"}</div>
-										</TableCell>
-										<TableCell className="text-xs">{item.environment || "-"}</TableCell>
-										<TableCell className="text-xs">{item.engine || "-"}</TableCell>
-										<TableCell className="text-xs">
-											{item.host}:{item.port}
-											<div className="text-muted-foreground">{item.dbname}</div>
-										</TableCell>
-										<TableCell>
-											<Badge
-												variant="secondary"
-												className={metric?.up ? "bg-green-500/15 text-green-700 dark:text-green-400" : "bg-red-500/15 text-red-600 dark:text-red-400"}
-											>
-												{metric ? (metric.up ? "up" : "down") : "pending"}
-											</Badge>
-										</TableCell>
-										<TableCell className="text-xs">
-											{metric ? `${metric.connections_total}/${metric.connections_max} (${metric.connection_usage.toFixed(0)}%)` : "-"}
-										</TableCell>
-										<TableCell className="text-xs">{metric?.long_queries ?? "-"}</TableCell>
-										<TableCell className="text-xs">{metric?.blocked_sessions ?? "-"}</TableCell>
-										<TableCell className="text-xs">
-											{metric ? `${metric.replication_lag_sec.toFixed(0)}s` : "-"}
-										</TableCell>
-										<TableCell className="text-xs">{metric ? formatBytes(metric.db_size_bytes, false) : "-"}</TableCell>
-										<TableCell className="text-xs text-muted-foreground">
-											{metric ? new Date(metric.collected).toLocaleTimeString(undefined, { timeZone: "Asia/Jakarta" }) : "-"}
-										</TableCell>
-										{admin && (
-											<TableCell>
-												<div className="flex gap-1">
-													<Button variant="ghost" size="sm" onClick={() => startEdit(item)}>
-														Edit
-													</Button>
-													<Button variant="ghost" size="sm" onClick={() => remove(item)}>
-														Delete
-													</Button>
-												</div>
-											</TableCell>
-										)}
-									</TableRow>
-								)
-							})}
+							{inventory.map((item) => (
+								<TableRow key={item.id}>
+									<TableCell className="font-medium">{item.name}</TableCell>
+									<TableCell className="text-xs">{item.environment || "-"}</TableCell>
+									<TableCell className="text-xs">{item.engine || "-"}</TableCell>
+									<TableCell className="text-xs">
+										{item.host}:{item.port}
+									</TableCell>
+									<TableCell className="text-xs">{item.version || "-"}</TableCell>
+									<TableCell className="max-w-64 truncate text-xs text-muted-foreground">
+										{item.last_error || "-"}
+									</TableCell>
+								</TableRow>
+							))}
 						</TableBody>
 					</Table>
 				</CardContent>
@@ -522,52 +422,34 @@ export default function DatabaseHealth() {
 								<TableHead>Value</TableHead>
 								<TableHead>Status</TableHead>
 								<TableHead>Triggered</TableHead>
-								<TableHead />
 							</TableRow>
 						</TableHeader>
 						<TableBody>
 							{alerts.length === 0 && (
 								<TableRow>
-									<TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
+									<TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
 										No open database alerts.
 									</TableCell>
 								</TableRow>
 							)}
-							{alerts.map((alert) => {
-								const item = inventory.find((i) => i.id === alert.inventory)
-								return (
-									<TableRow key={alert.id}>
-										<TableCell className="text-sm">{item?.name ?? alert.inventory}</TableCell>
-										<TableCell className="text-xs">{alert.metric}</TableCell>
-										<TableCell>
-											<Badge variant="secondary" className={statusColor[alert.severity] ?? ""}>
-												{alert.severity}
-											</Badge>
-										</TableCell>
-										<TableCell className="text-xs">{alert.value?.toFixed(2)}</TableCell>
-										<TableCell>
-											<Badge variant="secondary" className={statusColor[alert.status] ?? ""}>
-												{alert.status}
-											</Badge>
-										</TableCell>
-										<TableCell className="text-xs text-muted-foreground">
-											{new Date(alert.triggered).toLocaleString(undefined, { timeZone: "Asia/Jakarta" })}
-										</TableCell>
-										<TableCell>
-											{admin && (
-												<div className="flex gap-1">
-													<Button variant="ghost" size="sm" onClick={() => setAlertStatus(alert, "acknowledged")}>
-														Ack
-													</Button>
-													<Button variant="ghost" size="sm" onClick={() => setAlertStatus(alert, "resolved")}>
-														Resolve
-													</Button>
-												</div>
-											)}
-										</TableCell>
-									</TableRow>
-								)
-							})}
+							{alerts.map((alert) => (
+								<TableRow key={alert.id}>
+									<TableCell className="text-sm">
+										{inventory.find((item) => item.id === alert.inventory)?.name ?? alert.inventory}
+									</TableCell>
+									<TableCell className="text-xs">{alert.metric}</TableCell>
+									<TableCell>
+										<Badge variant="secondary">{alert.severity}</Badge>
+									</TableCell>
+									<TableCell className="text-xs">{alert.value?.toFixed(2)}</TableCell>
+									<TableCell>
+										<Badge variant="secondary">{alert.status}</Badge>
+									</TableCell>
+									<TableCell className="text-xs text-muted-foreground">
+										{new Date(alert.triggered).toLocaleString(undefined, { timeZone: "Asia/Jakarta" })}
+									</TableCell>
+								</TableRow>
+							))}
 						</TableBody>
 					</Table>
 				</CardContent>
@@ -600,4 +482,80 @@ function SummaryCard({
 			</CardContent>
 		</Card>
 	)
+}
+
+function MetricTile({
+	icon,
+	label,
+	value,
+	detail,
+	alert,
+}: {
+	icon: React.ReactNode
+	label: string
+	value: string
+	detail: string
+	alert?: boolean
+}) {
+	return (
+		<div className={cn("rounded-md border p-3", alert && "border-red-500/50 bg-red-500/5")}>
+			<div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+				{icon}
+				{label}
+			</div>
+			<div className="mt-1 text-xl font-semibold">{value}</div>
+			<p className="text-xs text-muted-foreground">{detail}</p>
+		</div>
+	)
+}
+
+/** Dependency-free sparkline so the page works without a chart library. */
+function SparklineCard({
+	title,
+	points,
+	secondaryPoints,
+	format,
+}: {
+	title: string
+	points: number[]
+	secondaryPoints?: number[]
+	format: (value: number) => string
+}) {
+	const width = 320
+	const height = 64
+	const path = buildPath(points, width, height)
+	const secondaryPath = secondaryPoints ? buildPath(secondaryPoints, width, height, points) : ""
+	const max = points.length ? Math.max(...points) : 0
+	const last = points.length ? points[points.length - 1] : undefined
+
+	return (
+		<div className="rounded-md border p-3">
+			<div className="flex items-center justify-between text-xs text-muted-foreground">
+				<span>{title}</span>
+				<span className="font-mono">{last === undefined ? "-" : format(last)}</span>
+			</div>
+			<svg viewBox={`0 0 ${width} ${height}`} className="mt-2 h-16 w-full" preserveAspectRatio="none">
+				<path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary" />
+				{secondaryPath && (
+					<path d={secondaryPath} fill="none" stroke="currentColor" strokeWidth="1" className="text-muted-foreground" />
+				)}
+			</svg>
+			<div className="text-[10px] text-muted-foreground">
+				peak {format(max)}
+			</div>
+		</div>
+	)
+}
+
+function buildPath(points: number[], width: number, height: number, scaleWith?: number[]): string {
+	if (points.length === 0) return ""
+	const max = Math.max(1, ...points, ...(scaleWith ?? []))
+	const step = points.length > 1 ? width / (points.length - 1) : width
+	return points
+		.map((value, index) => {
+			const x = index * step
+			const y = height - (value / max) * (height - 4) - 2
+			return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`
+		})
+		.join(" ")
 }

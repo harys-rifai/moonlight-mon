@@ -162,3 +162,38 @@ The Databases page (`/databases`) shows network monitors filtered by common data
 | Aerospike | 3000 |
 
 Add monitors via the **Monitors** page or directly in the Databases table using TCP protocol.
+
+## Database Observability
+
+Adopted from `obs.md`: a collector-driven module for database health, capacity, and alerting.
+
+- **Page** — `/db-health` (navbar "Database Health").
+- **Inventory** — `db_inventory` stores name, application, environment, engine, host/port, database, credentials, owner, HA mode, cloud provider, group. Passwords are stored in a hidden field and never returned by the API.
+- **Collector** — runs every 60s in the hub and records into `db_metrics`: availability, version, uptime, connections (total/active/idle/max/usage), long-running queries (>5 min), blocked sessions, lock wait, replication lag, database size, oldest transaction.
+- **Alerting** — `db_alert_rules` holds warning/critical thresholds (defaults below); `db_alerts` follows the `new → warning → critical → acknowledged → resolved` lifecycle and can be acknowledged/resolved from the page.
+- **Notifications** — transitions are sent to the webhooks and email addresses configured in admin user settings (Teams/Slack/Telegram via shoutrrr URLs, plus SMTP email).
+- **Retention** — raw samples are pruned after 30 days.
+
+| Metric | Warning | Critical |
+|--------|---------|----------|
+| connection_usage | 80% | 90% |
+| long_queries | 1 | 5 |
+| blocked_sessions | 10 | 25 |
+| lock_wait_sec | 60 | 120 |
+| replication_lag_sec | 60 | 300 |
+| oldest_tx_sec | 300 | 900 |
+| down | - | any |
+
+PostgreSQL targets are collected natively. MySQL, SQL Server, and Oracle are supported as inventory entries today; their SQL collectors are the next phase from `obs.md` (MySQL also needs a driver dependency).
+
+### Deep PostgreSQL metrics
+
+Each cycle also records TPS/QPS, slow queries (>1 min and >5 min), blocked sessions, lock waits, idle-in-transaction, deadlocks rate, cache hit ratio, WAL bytes/s, temp bytes/s, block read/write time, and statement samples in `db_query_samples` (7-day retention).
+
+Statement-level APM uses `pg_stat_statements` when installed; otherwise the collector falls back to the currently running statements slower than 5s. To enable full APM:
+
+```sql
+ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';
+-- restart PostgreSQL, then in each database:
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+```

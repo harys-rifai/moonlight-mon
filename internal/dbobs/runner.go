@@ -25,6 +25,10 @@ var DefaultRules = []struct {
 	{"lock_wait_sec", 60, 120},
 	{"replication_lag_sec", 60, 300},
 	{"oldest_tx_sec", 300, 900},
+	{"slow_queries", 1, 5},
+	{"deadlocks_rate", 0.1, 1},
+	{"idle_in_tx", 5, 20},
+	{"waiting_locks", 1, 5},
 }
 
 // Start runs the collector loop until the app stops.
@@ -72,7 +76,7 @@ func sampleDatabase(app core.App, item *core.Record, rules map[string]rule, noti
 		item.GetString("sslmode"),
 	)
 
-	metrics, collectErr := CollectPostgres(context.Background(), dsn)
+	metrics, samples, collectErr := CollectPostgres(context.Background(), dsn)
 	now := time.Now()
 	message := ""
 	if collectErr != nil {
@@ -80,10 +84,6 @@ func sampleDatabase(app core.App, item *core.Record, rules map[string]rule, noti
 		metrics = Metrics{Up: false}
 	}
 
-	inventoryCol, err := app.FindCollectionByNameOrId("db_inventory")
-	if err != nil {
-		return
-	}
 	if item.GetString("version") == "" || metrics.Up {
 		item.Set("version", metrics.Version)
 	}
@@ -97,9 +97,12 @@ func sampleDatabase(app core.App, item *core.Record, rules map[string]rule, noti
 
 	metricsCol, err := app.FindCollectionByNameOrId("db_metrics")
 	if err != nil {
-		_ = inventoryCol
 		return
 	}
+
+	// Convert cumulative counters to rates using the previous sample.
+	dt, rates := computeRates(app, item.Id, metrics, now)
+
 	record := core.NewRecord(metricsCol)
 	record.Set("inventory", item.Id)
 	record.Set("collected", now)
@@ -117,13 +120,108 @@ func sampleDatabase(app core.App, item *core.Record, rules map[string]rule, noti
 	record.Set("replication_lag_sec", round2(metrics.ReplicationLag))
 	record.Set("db_size_bytes", metrics.DBSizeBytes)
 	record.Set("oldest_tx_sec", round2(metrics.OldestTxSec))
-	record.Set("details", map[string]any{"error": message})
+	record.Set("xact_commit", metrics.XactCommit)
+	record.Set("xact_rollback", metrics.XactRollback)
+	record.Set("queries_total", metrics.QueriesTotal)
+	record.Set("blks_read", metrics.BlksRead)
+	record.Set("blks_hit", metrics.BlksHit)
+	record.Set("temp_bytes", metrics.TempBytes)
+	record.Set("wal_bytes", metrics.WalBytes)
+	record.Set("deadlocks", metrics.Deadlocks)
+	record.Set("slow_queries", metrics.SlowQueries)
+	record.Set("idle_in_tx", metrics.IdleInTx)
+	record.Set("waiting_locks", metrics.WaitingLocks)
+	record.Set("blk_read_time_ms", round2(metrics.BlkReadTimeMs))
+	record.Set("blk_write_time_ms", round2(metrics.BlkWriteTime))
+	record.Set("cache_hit_ratio", round2(metrics.CacheHitRatio))
+	record.Set("tps", round2(rates.tps))
+	record.Set("qps", round2(rates.qps))
+	record.Set("deadlocks_rate", round2(rates.deadlocks))
+	record.Set("temp_bytes_rate", round2(rates.tempBytes))
+	record.Set("wal_bytes_rate", round2(rates.walBytes))
+	record.Set("details", map[string]any{"error": message, "interval_sec": round2(dt)})
 	if err := app.Save(record); err != nil {
 		app.Logger().Error("dbobs: failed to save metrics", "err", err, "db", item.GetString("name"))
 	}
 
-	evaluateAlerts(app, item, metrics, rules, notify)
+	saveQuerySamples(app, item, samples, now)
+	evaluateAlerts(app, item, metrics, rates, rules, notify)
 	pruneMetrics(app, item.Id)
+}
+
+type rates struct {
+	tps      float64
+	qps      float64
+	deadlocks float64
+	tempBytes float64
+	walBytes  float64
+}
+
+func computeRates(app core.App, inventoryID string, m Metrics, now time.Time) (float64, rates) {
+	var r rates
+	previous, err := app.FindRecordsByFilter(
+		"db_metrics",
+		"inventory={:inv}",
+		"-collected",
+		1,
+		0,
+		dbx.Params{"inv": inventoryID},
+	)
+	if err != nil || len(previous) == 0 {
+		return 0, r
+	}
+	prev := previous[0]
+	collected := prev.GetDateTime("collected").Time()
+	dt := now.Sub(collected).Seconds()
+	if dt <= 0 || dt > 600 {
+		return dt, r
+	}
+	delta := func(current, before int64) float64 {
+		diff := float64(current - before)
+		if diff < 0 {
+			return 0 // counter reset (restart)
+		}
+		return diff / dt
+	}
+	r.tps = delta(m.XactCommit+m.XactRollback, int64(prev.GetFloat("xact_commit"))+int64(prev.GetFloat("xact_rollback")))
+	r.qps = delta(m.QueriesTotal, int64(prev.GetFloat("queries_total")))
+	r.deadlocks = delta(m.Deadlocks, int64(prev.GetFloat("deadlocks")))
+	r.tempBytes = delta(m.TempBytes, int64(prev.GetFloat("temp_bytes")))
+	r.walBytes = delta(m.WalBytes, int64(prev.GetFloat("wal_bytes")))
+	return dt, r
+}
+
+func saveQuerySamples(app core.App, item *core.Record, samples []QuerySample, now time.Time) {
+	if len(samples) == 0 {
+		return
+	}
+	collection, err := app.FindCollectionByNameOrId("db_query_samples")
+	if err != nil {
+		return
+	}
+	for _, sample := range samples {
+		record := core.NewRecord(collection)
+		record.Set("inventory", item.Id)
+		record.Set("collected", now)
+		record.Set("query", truncate(sample.Query, 1900))
+		record.Set("calls", sample.Calls)
+		record.Set("mean_ms", round2(sample.MeanMs))
+		record.Set("total_ms", round2(sample.TotalMs))
+		record.Set("rows", sample.Rows)
+		record.Set("cache_hit_ratio", round2(sample.CacheHit))
+		if err := app.Save(record); err != nil {
+			app.Logger().Debug("dbobs: failed to save query sample", "err", err)
+			return
+		}
+	}
+	cutoff := now.AddDate(0, 0, -7)
+	_, err = app.DB().
+		NewQuery("DELETE FROM db_query_samples WHERE inventory = {:inv} AND collected < {:cutoff}").
+		Bind(dbx.Params{"inv": item.Id, "cutoff": cutoff}).
+		Execute()
+	if err != nil {
+		app.Logger().Debug("dbobs: query sample retention cleanup failed", "err", err)
+	}
 }
 
 type rule struct {
@@ -151,7 +249,7 @@ func loadRules(app core.App) map[string]rule {
 	return rules
 }
 
-func evaluateAlerts(app core.App, item *core.Record, metrics Metrics, rules map[string]rule, notify Notifier) {
+func evaluateAlerts(app core.App, item *core.Record, metrics Metrics, r rates, rules map[string]rule, notify Notifier) {
 	values := map[string]float64{
 		"connection_usage":    metrics.ConnUsage,
 		"long_queries":        float64(metrics.LongQueries),
@@ -159,6 +257,10 @@ func evaluateAlerts(app core.App, item *core.Record, metrics Metrics, rules map[
 		"lock_wait_sec":       metrics.LockWaitSec,
 		"replication_lag_sec": metrics.ReplicationLag,
 		"oldest_tx_sec":       metrics.OldestTxSec,
+		"slow_queries":        float64(metrics.SlowQueries),
+		"deadlocks_rate":      r.deadlocks,
+		"idle_in_tx":          float64(metrics.IdleInTx),
+		"waiting_locks":       float64(metrics.WaitingLocks),
 	}
 	if !metrics.Up {
 		values["down"] = 1

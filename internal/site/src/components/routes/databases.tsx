@@ -7,13 +7,7 @@ import { pb } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { $router, navigate } from "@/components/router"
 import { getPagePath } from "@nanostores/router"
-import type { NetworkMonitorRecord } from "@/types"
-
-const DATABASE_PORTS = new Set([5432, 3306, 6379, 1433, 1521, 50000, 3000, 5006, 5008, 27017, 9200])
-
-/** Telnet monitors are always database/service monitors, whatever port they use. */
-const isDatabaseMonitor = (monitor: NetworkMonitorRecord) =>
-	monitor.protocol === "telnet" || DATABASE_PORTS.has(monitor.port)
+import { isDatabaseMonitor } from "@/lib/database-monitors"
 
 export default memo(() => {
 	const { t } = useLingui()
@@ -51,6 +45,18 @@ export default memo(() => {
 
 	return (
 		<div className="flex flex-col gap-4 pb-4">
+			<div className="flex justify-end">
+				<a
+					href={getPagePath($router, "db_health")}
+					className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+					onClick={(e) => {
+						e.preventDefault()
+						navigate(getPagePath($router, "db_health"))
+					}}
+				>
+					<Trans>Database health</Trans> →
+				</a>
+			</div>
 			<NetworkMonitorsTableNew
 				monitors={visibleMonitors}
 				isLoading={isLoading}
