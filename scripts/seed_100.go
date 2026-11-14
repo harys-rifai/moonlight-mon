@@ -56,7 +56,7 @@ func main() {
 	for i := 1; i <= 100; i++ {
 		id := fmt.Sprintf("seedusr%04d", i)
 		email := fmt.Sprintf("seed.user%03d@moonlight.local", i)
-		exec(`insert into users (id,email,emailVisibility,verified,username,role,name,avatar,password,tokenKey,created,updated)
+		exec(`insert into users (id,email,"emailVisibility",verified,username,role,name,avatar,password,"tokenKey",created,updated)
 			values ({:id},{:email},false,true,{:username},{:role},{:name},'',{:password},{:tokenKey},{:created}::timestamp,{:updated}::timestamp)`,
 			dbx.Params{"id": id, "email": email, "username": fmt.Sprintf("seeduser%03d", i), "role": "user", "name": fmt.Sprintf("Seed User %03d", i),
 				"password": "$2a$10$seedplaceholderhashseedplaceholderhashseedplaceho", "tokenKey": fmt.Sprintf("seedtokenkey%038d", i),
@@ -144,7 +144,7 @@ func main() {
 	// 100 system_stats & 100 container_stats
 	for i := 1; i <= 100; i++ {
 		ss, _ := json.Marshal(map[string]any{"cpu": float64(i%90) + 1.0, "m": 32.0, "mu": float64(10+i%20), "mp": float64(30+i%60), "d": 500.0, "du": float64(100+i%300), "dp": float64(20+i%70), "ns": 1e6 + float64(i)*1000, "nr": 9e5 + float64(i)*800, "la": []float64{0.5, 0.6, 0.7}})
-		exec(`insert into system_stats (id,system,stats,type,created,updated) values ({:id},{:system},{:stats}::jsonb,'1m',{created}::timestamp,{updated}::timestamp)`.replace("{created}", "{:created}").replace("{updated}", "{:updated}"),
+		exec(`insert into system_stats (id,system,stats,type,created,updated) values ({:id},{:system},{:stats}::jsonb,'1m',{:created}::timestamp,{:updated}::timestamp)`,
 			dbx.Params{"id": fmt.Sprintf("seedsst%04d", i), "system": fmt.Sprintf("seedsys%04d", ((i-1)%100)+1), "stats": string(ss), "created": ts(-time.Duration(i)*time.Minute), "updated": ts(-time.Duration(i)*time.Minute)})
 		cs, _ := json.Marshal([]map[string]any{{"n": fmt.Sprintf("postgres-primary-%02d", i), "c": float64(i%50), "m": 512.0 + float64(i)}})
 		exec(`insert into container_stats (id,system,stats,type,created,updated) values ({:id},{:system},{:stats}::jsonb,'1m',{:created}::timestamp,{:updated}::timestamp)`,
