@@ -43,7 +43,7 @@ func deleteOldAlertsHistory(app core.App, countToKeep, countBeforeDeletion int) 
 	var users []struct {
 		Id string `db:"user"`
 	}
-	err := db.NewQuery("SELECT user, COUNT(*) as count FROM alerts_history GROUP BY user HAVING count > {:countBeforeDeletion}").Bind(dbx.Params{"countBeforeDeletion": countBeforeDeletion}).All(&users)
+	err := db.NewQuery("SELECT user, COUNT(*) as total FROM alerts_history GROUP BY user HAVING COUNT(*) > {:countBeforeDeletion}").Bind(dbx.Params{"countBeforeDeletion": countBeforeDeletion}).All(&users)
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func deleteOldContainerRecords(app core.App) error {
 // Deletes old quiet hours records where end date has passed
 func deleteOldQuietHours(app core.App) error {
 	now := time.Now().UTC()
-	_, err := app.DB().NewQuery("DELETE FROM quiet_hours WHERE type = 'one-time' AND end < {:now}").Bind(dbx.Params{"now": now}).Execute()
+	_, err := app.DB().NewQuery(`DELETE FROM quiet_hours WHERE type = 'one-time' AND "end" < {:now}`).Bind(dbx.Params{"now": now}).Execute()
 	if err != nil {
 		return err
 	}

@@ -10,7 +10,7 @@ type MonitorTarget = Pick<NetworkMonitorRecord, "target" | "protocol" | "port">
 export function getMonitorTarget(monitor: MonitorTarget) {
 	// The protocol column already says http, so the URL scheme is redundant.
 	if (monitor.protocol === "http") return monitor.target.replace(/^https?:\/\//i, "")
-	if (monitor.protocol !== "tcp") return monitor.target
+	if (monitor.protocol !== "tcp" && monitor.protocol !== "telnet") return monitor.target
 	const host = monitor.target.includes(":") && !monitor.target.startsWith("[") ? `[${monitor.target}]` : monitor.target
 	return `${host}:${monitor.port}`
 }

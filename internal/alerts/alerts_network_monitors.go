@@ -231,7 +231,7 @@ func (am *AlertManager) evaluateNetworkMonitorAlerts(app core.App, systemID stri
 						continue
 					}
 					label := m.GetString("target")
-					if m.GetString("protocol") == "tcp" {
+					if protocol := m.GetString("protocol"); protocol == "tcp" || protocol == "telnet" {
 						label = net.JoinHostPort(label, strconv.Itoa(m.GetInt("port")))
 					}
 					if obs.triggered {

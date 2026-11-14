@@ -686,7 +686,7 @@ export interface NetworkMonitorRecord {
 	id: string
 	system: string
 	target: string
-	protocol: "icmp" | "tcp" | "http" | "dns"
+	protocol: "icmp" | "tcp" | "http" | "dns" | "telnet"
 	port: number
 	server: string
 	/** Skip TLS certificate verification for HTTPS targets. */

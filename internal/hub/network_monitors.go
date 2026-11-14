@@ -14,8 +14,8 @@ import (
 // generateMonitorID creates a stable hash ID for a monitor based on its configuration and the system it belongs to.
 func generateMonitorID(systemId string, config monitor.Config) string {
 	args := []string{systemId, config.Target, config.Protocol}
-	// only use port for TCP monitors, since for other protocols it's not relevant as standalone value
-	if config.Protocol == "tcp" {
+	// port identifies TCP and telnet monitors, since each port is a separate service
+	if config.Protocol == "tcp" || config.Protocol == "telnet" {
 		args = append(args, strconv.FormatUint(uint64(config.Port), 10))
 	}
 	// only use server for DNS monitors, so the same target queried via different servers gets distinct monitors
@@ -77,8 +77,8 @@ func bindNetworkMonitorsEvents(hub *Hub) {
 			}
 		}
 		protocol := e.Record.GetString("protocol")
-		// only tcp uses port - set other protocols port to zero
-		if protocol != "tcp" {
+		// tcp and telnet monitors use port - set other protocols port to zero
+		if protocol != "tcp" && protocol != "telnet" {
 			e.Record.Set("port", 0)
 		}
 		// only dns uses server - clear it for other protocols

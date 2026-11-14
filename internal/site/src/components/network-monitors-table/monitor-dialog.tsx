@@ -70,13 +70,15 @@ const NormalizedMonitorValuesSchema = v.pipe(
 	v.transform((input): NormalizedMonitorValues => {
 		let { protocol, port } = input
 		let httpTarget = input.target
-		if (protocol === "icmp" || protocol === "http" || protocol === "dns" || protocol === "telnet") {
+		if (protocol === "icmp" || protocol === "http" || protocol === "dns") {
 			if (protocol === "http") {
 				httpTarget = normalizeHttpTarget(input.target, port)
 			}
 			port = 0
 		} else if (protocol === "tcp" && !port) {
 			port = 443
+		} else if (protocol === "telnet" && !port) {
+			port = 23
 		}
 		return {
 			// HTTP monitors may be entered as bare hostnames, so normalize them to a
@@ -90,25 +92,17 @@ const NormalizedMonitorValuesSchema = v.pipe(
 			// Only HTTPS targets use TLS; clear it for everything else.
 			skipTlsVerify: protocol === "http" && isHttpsTarget(httpTarget) && input.skipTlsVerify,
 		}
-		}),
+	}),
 	v.forward(
-			v.check((input) => {
-				if (input.protocol === "icmp" || input.protocol === "http" || input.protocol === "dns") {
-					return input.port === 0
-				}
+		v.check((input) => {
+			if (input.protocol === "icmp" || input.protocol === "http" || input.protocol === "dns") {
+				return input.port === 0
+			}
 
-				return Number.isInteger(input.port) && input.port >= 1 && input.port <= 65535
-			}, "Port must be between 1 and 65535"),
-			["port"]
-		),
-		// For telnet, port must be between 1 and 65535 (no zero allowed)
-		v.forward(
-			v.check(
-				(input) => input.protocol !== "telnet" || input.port >= 1 && input.port <= 65535,
-				"Telnet port must be between 1 and 65535"
-			),
-			["port"]
-		)
+			return Number.isInteger(input.port) && input.port >= 1 && input.port <= 65535
+		}, "Port must be between 1 and 65535"),
+		["port"]
+	)
 )
 
 function isIpAddress(value: string) {
@@ -201,15 +195,7 @@ function parseBulkMonitorLine(line: string, lineNumber: number, system: string) 
 	}
 	const protocol = (parsed.output.protocol?.toLowerCase() ||
 		(/^https?:\/\//i.test(parsed.output.target) ? "http" : "icmp")) as MonitorProtocol
-	
-	// Map telnet protocol name and set default port
-	if (protocol === "telnet") {
-		// telnet defaults to port 23
-		if (!parsed.output.port) {
-			parsed.output.port = "23"
-		}
-	}
-	
+
 	return buildMonitorPayload({
 		system,
 		target: parsed.output.target,
@@ -222,7 +208,10 @@ function parseBulkMonitorLine(line: string, lineNumber: number, system: string) 
 }
 
 export function formatBulkMonitorLine(monitor: BulkMonitorLineSource) {
-	const port = monitor.protocol !== "tcp" || monitor.protocol === "telnet" || monitor.port === 443 ? "" : `${monitor.port}`
+	// Omit the port when it matches the protocol default so copied lines stay short.
+	const defaultPort = monitor.protocol === "tcp" ? 443 : monitor.protocol === "telnet" ? 23 : 0
+	const includesPort = monitor.protocol === "tcp" || monitor.protocol === "telnet"
+	const port = includesPort && monitor.port !== defaultPort ? `${monitor.port}` : ""
 	const interval = monitor.interval === defaultInterval ? "" : `${monitor.interval}`
 	const server = monitor.protocol !== "dns" ? "" : monitor.server
 	return formatMonitorFields(trimTrailingEmptyFields([monitor.target, monitor.protocol, port, interval, server]))
@@ -748,7 +737,9 @@ function MonitorDialogContent({
 }) {
 	const [protocol, setProtocol] = useState<MonitorProtocol>(monitor?.protocol ?? "icmp")
 	const [target, setTarget] = useState(monitor?.target ?? "")
-	const [port, setPort] = useState(monitor?.protocol === "tcp" && monitor.port ? String(monitor.port) : "")
+	const [port, setPort] = useState(
+		(monitor?.protocol === "tcp" || monitor?.protocol === "telnet") && monitor.port ? String(monitor.port) : ""
+	)
 	const [server, setServer] = useState(monitor?.protocol === "dns" ? (monitor.server ?? "") : "")
 	const [monitorInterval, setMonitorInterval] = useState(String(monitor?.interval ?? defaultInterval))
 	const [skipTlsVerify, setSkipTlsVerify] = useState(monitor?.skipTlsVerify ?? false)
@@ -762,27 +753,20 @@ function MonitorDialogContent({
 	const dnsTargetIsIp = protocol === "dns" && isIpAddress(target.trim())
 	// Bare hostnames are normalized to https, so they can also skip verification.
 	const usesTls = protocol === "http" && !/^http:\/\//i.test(target.trim())
-	
-	// Sync protocol with telnet port - ensure telnet defaults to port 23
-	useEffect(() => {
-		if (protocol === "telnet") {
-			if (!port && !monitor?.port) {
-				setPort("23")
-			} else if (monitor?.port && !port) {
-				setPort(String(monitor.port))
-			}
-		}
-	}, [protocol, port, monitor?.port])
-	
+	// Telnet monitors need a port; default to the standard telnet port.
+	const portRequired = protocol === "tcp" || protocol === "telnet"
+
 	// When the dialog is opened, initialize form fields with monitor values (if editing) or defaults (if adding).
 	useEffect(() => {
 		if (!open) {
 			return
 		}
-	
+
 		setProtocol(monitor?.protocol ?? "icmp")
 		setTarget(monitor?.target ?? "")
-		setPort(monitor?.protocol === "tcp" && monitor.port ? String(monitor.port) : "")
+		setPort(
+			(monitor?.protocol === "tcp" || monitor?.protocol === "telnet") && monitor.port ? String(monitor.port) : ""
+		)
 		setServer(monitor?.protocol === "dns" ? (monitor.server ?? "") : "")
 		setMonitorInterval(String(monitor?.interval ?? defaultInterval))
 		setSkipTlsVerify(monitor?.skipTlsVerify ?? false)
@@ -790,13 +774,14 @@ function MonitorDialogContent({
 		setSelectedSystemIds(new Set())
 		setLoading(false)
 	}, [open, monitor])
-	
-	// Update port when protocol changes
+
+	// Default telnet monitors to port 23 when the user switches to telnet.
 	useEffect(() => {
-		if (protocol === "telnet" && !port && !monitor?.port) {
-			setPort("23")
+		if (protocol === "telnet" && !port) {
+			setPort(monitor?.port ? String(monitor.port) : "23")
 		}
 	}, [protocol, port, monitor?.port])
+
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault()
@@ -811,7 +796,7 @@ function MonitorDialogContent({
 					system: targetSystems[0],
 					target,
 					protocol,
-				port: protocol === "tcp" ? Number(port) : (protocol === "telnet" ? (port ? Number(port) : 23) : 0),
+					port: portRequired ? Number(port) : 0,
 				server: protocol === "dns" ? server.trim() : "",
 				interval: monitorInterval,
 				skipTlsVerify,
@@ -929,36 +914,21 @@ function MonitorDialogContent({
 						</SelectContent>
 					</Select>
 				</div>
-			{protocol === "tcp" && (
-				<div className="grid gap-2">
-					<Label>
-						<Trans>Port</Trans>
-					</Label>
-					<Input
-						type="number"
-						value={port}
-						onChange={(e) => setPort(e.target.value)}
-						placeholder="443"
-						min={1}
-						max={65535}
-					/>
-				</div>
-			)}
-			{protocol === "telnet" && (
-				<div className="grid gap-2">
-					<Label>
-						<Trans>Port</Trans>
-					</Label>
-					<Input
-						type="number"
-						value={port}
-						onChange={(e) => setPort(e.target.value)}
-						placeholder="23"
-						min={1}
-						max={65535}
-					/>
-				</div>
-			)}
+				{portRequired && (
+					<div className="grid gap-2">
+						<Label>
+							<Trans>Port</Trans>
+						</Label>
+						<Input
+							type="number"
+							value={port}
+							onChange={(e) => setPort(e.target.value)}
+							placeholder={protocol === "telnet" ? "23" : "443"}
+							min={1}
+							max={65535}
+						/>
+					</div>
+				)}
 				{protocol === "dns" && (
 					<div className="grid gap-2">
 						<Label>

@@ -742,7 +742,7 @@ function NetworkMonitorSheetContent({
 						<Separator orientation="vertical" className="h-2.5 bg-muted-foreground opacity-70" />
 						<ArrowLeftRightIcon className="size-3.5 text-muted-foreground -me-0.5" />
 						{getMonitorProtocolLabel(monitor).toUpperCase()}
-						{monitor.protocol === "tcp" && monitor.port > 0 && (
+						{(monitor.protocol === "tcp" || monitor.protocol === "telnet") && monitor.port > 0 && (
 							<>
 								<Separator orientation="vertical" className="h-2.5 bg-muted-foreground opacity-70" />
 								<EthernetPortIcon className="size-3.5 text-muted-foreground" />

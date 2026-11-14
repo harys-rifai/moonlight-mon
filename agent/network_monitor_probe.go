@@ -27,6 +27,9 @@ func networkMonitorProbe(client, insecureClient *http.Client) monitorProbe {
 			return monitorICMP(ctx, config.Target)
 		case "tcp":
 			return monitorTCP(ctx, config.Target, config.Port)
+		case "telnet":
+			// Telnet availability is measured by the TCP handshake on the telnet port.
+			return monitorTCP(ctx, config.Target, config.Port)
 		case "http":
 			if config.SkipTLSVerify {
 				return monitorHTTP(ctx, insecureClient, config.Target)
